@@ -1,0 +1,20 @@
+{
+  "name": "Weight360",
+  "short_name": "Weight360",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f1724",
+  "theme_color": "#0f1724",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADAAQAAAAA0tq9AAAAAklEQVR4AewaftIAAABRSURBVO3BQQEAAAjDsP1fHcIMgAAAAAAAAAAAAAAAAAAAAAAwJkD0gAB9hJ2hwAAAABJRU5ErkJggg==",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIABQAAAAA8yH2sAAAAAklEQVR4AewaftIAAABRSURBVO3BQQEAAAjDsP1fHcIMgAAAAAAAAAAAAAAAAAAAAAAwJkD0gAB9hJ2hwAAAABJRU5ErkJggg==",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
