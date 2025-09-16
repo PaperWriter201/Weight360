@@ -138,4 +138,346 @@
         <div class="tiny muted">Click a row to edit</div>
       </div>
       <div style="overflow:auto;max-height:260px">
-        <
+        <table id="logTable">
+          <thead><tr><th>Date</th><th>Weight</th><th>Notes</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="clearAll">Clear ALL data</button>
+        <small class="muted">Data is stored locally in this browser.</small>
+      </div>
+    </section>
+  </div>
+
+  <!-- libs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+
+  <script>
+    // ====== STORAGE KEYS ======
+    const KEY = 'weight360_v1';
+    const META_KEY = KEY + '_meta';
+    const FOOD_KEY = KEY + '_food';
+
+    // ====== DATES ======
+    const todayISO = () => new Date().toISOString().slice(0,10);
+    const targetDate = new Date('2026-01-01'); // Jan 1, 2026
+    const fmtShort = (d)=> new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+
+    // ====== STATE ======
+    let entries = [];          // [{date, weight, notes}]
+    let foods = [];            // [{date, name, kcal}]
+    let editingIndex = null;
+
+    // ====== ELEMENTS ======
+    const dateEl = document.getElementById('date');
+    const weightEl = document.getElementById('weight');
+    const notesEl = document.getElementById('notes');
+
+    const goalEl = document.getElementById('goal');
+    const saveGoalBtn = document.getElementById('saveGoal');
+    const clearGoalBtn = document.getElementById('clearGoal');
+    const hdrGoal = document.getElementById('hdrGoal');
+
+    const addWeightBtn = document.getElementById('addWeight');
+    const saveWeightBtn = document.getElementById('saveWeight');
+    const clearAllBtn = document.getElementById('clearAll');
+    const exportCsvBtn = document.getElementById('exportCsv');
+    const importCsv = document.getElementById('importCsv');
+
+    const firstVal = document.getElementById('firstVal');
+    const latestVal = document.getElementById('latestVal');
+    const changeVal = document.getElementById('changeVal');
+    const rateVal = document.getElementById('rateVal');
+    const daysLeftVal = document.getElementById('daysLeftVal');
+    const progressBar = document.getElementById('progressBar');
+    const progressLabel = document.getElementById('progressLabel');
+
+    const maxCalPerDayEl = document.getElementById('maxCalPerDay');
+    const recalcBtn = document.getElementById('recalc');
+    const targetDateLbl = document.getElementById('targetDateLbl');
+
+    const logTableBody = document.querySelector('#logTable tbody');
+
+    // Food elements
+    const foodDate = document.getElementById('foodDate');
+    const foodName = document.getElementById('foodName');
+    const foodCals = document.getElementById('foodCals');
+    const addFoodBtn = document.getElementById('addFood');
+    const foodTableBody = document.querySelector('#foodTable tbody');
+    const todayTotal = document.getElementById('todayTotal');
+    const todayRemain = document.getElementById('todayRemain');
+    const maintKcal = document.getElementById('maintKcal');
+    const autoMaint = document.getElementById('autoMaint');
+
+    // ====== CHART ======
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    let chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets: [{ label:'Weight', data: [], fill:false, tension:0.25, pointRadius:3 }] },
+      options: {
+        responsive:true,
+        maintainAspectRatio:false, // we control height via CSS
+        scales: { x: { type:'time', time:{unit:'day'} }, y: { beginAtZero:false } },
+        plugins:{legend:{display:false}}
+      }
+    });
+
+    // ====== STORAGE HELPERS ======
+    function saveAll(){
+      localStorage.setItem(KEY, JSON.stringify(entries));
+      localStorage.setItem(FOOD_KEY, JSON.stringify(foods));
+      const meta = { goal: goalEl.value || '', maint: maintKcal.value || '' };
+      localStorage.setItem(META_KEY, JSON.stringify(meta));
+    }
+    function loadAll(){
+      try{ entries = JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{ entries=[]; }
+      try{ foods = JSON.parse(localStorage.getItem(FOOD_KEY)||'[]'); }catch{ foods=[]; }
+      let meta = {};
+      try{ meta = JSON.parse(localStorage.getItem(META_KEY)||'{}'); }catch{}
+      goalEl.value = meta.goal || '190';
+      maintKcal.value = meta.maint || '';
+      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+    }
+
+    // ====== RENDER ======
+    function renderWeights(){
+      // table
+      logTableBody.innerHTML = '';
+      entries.forEach((e,i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${e.date}</td><td>${Number(e.weight).toFixed(1)}</td><td>${e.notes||''}</td><td style="text-align:right"><button data-i="${i}" class="del">Delete</button></td>`;
+        tr.style.cursor='pointer';
+        tr.addEventListener('click', (ev)=>{
+          if(ev.target.classList.contains('del')) return;
+          editWeight(i);
+        });
+        tr.querySelector('.del').addEventListener('click', (ev)=>{ ev.stopPropagation(); if(confirm('Delete this entry?')){ entries.splice(i,1); saveAll(); refresh(); }});
+        logTableBody.appendChild(tr);
+      });
+
+      // chart
+      chart.data.labels = entries.map(e=>e.date);
+      chart.data.datasets[0].data = entries.map(e=>({x:e.date, y:parseFloat(e.weight)}));
+      chart.update();
+
+      // stats
+      if(entries.length===0){
+        firstVal.textContent = latestVal.textContent = changeVal.textContent = rateVal.textContent = '—';
+        progressBar.style.width='0%'; progressLabel.textContent='0%';
+      } else {
+        const first = parseFloat(entries[0].weight);
+        const last = parseFloat(entries[entries.length-1].weight);
+        firstVal.textContent = `${first.toFixed(1)} lbs • ${entries[0].date}`;
+        latestVal.textContent = `${last.toFixed(1)} lbs • ${entries[entries.length-1].date}`;
+        const delta = last - first;
+        changeVal.textContent = `${delta>=0?'+':''}${delta.toFixed(1)} lbs`;
+        const start = new Date(entries[0].date);
+        const end = new Date(entries[entries.length-1].date);
+        const days = Math.max(1, Math.round((end - start)/(1000*60*60*24)));
+        const weeks = days/7;
+        rateVal.textContent = `${(delta/weeks).toFixed(2)} lbs/week`;
+
+        // progress to goal
+        const goal = parseFloat(goalEl.value);
+        if(!isNaN(goal)){
+          const span = (first - goal); // lbs to lose from first to goal
+          const done = (first - last); // lost so far
+          const pct = span>0 ? Math.max(0, Math.min(100, (done/span)*100)) : 0;
+          progressBar.style.width = pct.toFixed(1) + '%';
+          progressLabel.textContent = pct.toFixed(1) + '%';
+        } else {
+          progressBar.style.width='0%'; progressLabel.textContent='0%';
+        }
+      }
+
+      // misc
+      const now = new Date();
+      const daysLeft = Math.max(0, Math.ceil((targetDate - now)/(1000*60*60*24)));
+      daysLeftVal.textContent = daysLeft.toString();
+      hdrGoal.textContent = goalEl.value ? `${parseFloat(goalEl.value).toFixed(0)} lbs` : '—';
+    }
+
+    function renderFoods(){
+      foodTableBody.innerHTML = '';
+      foods.forEach((f, i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${f.date}</td><td>${f.name||''}</td><td>${Number(f.kcal||0)}</td><td style="text-align:right"><button data-i="${i}" class="delFood">Delete</button></td>`;
+        tr.querySelector('.delFood').addEventListener('click', ()=>{ if(confirm('Delete this item?')){ foods.splice(i,1); saveAll(); refresh(); }});
+        foodTableBody.appendChild(tr);
+      });
+
+      const d = foodDate.value || todayISO();
+      const todays = foods.filter(f=>f.date===d);
+      const total = todays.reduce((s,f)=>s+(parseFloat(f.kcal)||0),0);
+      todayTotal.textContent = total.toFixed(0);
+
+      const max = parseFloat(maxCalPerDayEl.textContent) || 0;
+      todayRemain.textContent = max>0 ? `${(max - total).toFixed(0)} kcal` : '—';
+    }
+
+    function refresh(){
+      renderWeights();
+      calcMaxCalories(); // updates maxCalPerDay
+      renderFoods();     // uses updated max for remaining
+    }
+
+    // ====== EDIT / ADD ======
+    function editWeight(i){
+      editingIndex = i;
+      const e = entries[i];
+      dateEl.value = e.date;
+      weightEl.value = e.weight;
+      notesEl.value = e.notes || '';
+      addWeightBtn.style.display='none';
+      saveWeightBtn.style.display='inline-block';
+    }
+
+    // ====== CALC MAX CALORIES/DAY ======
+    // deficit/day = (lbs_to_lose * 3500) / days_left
+    // max/day = maintenance - deficit (clamped to a safety floor)
+    function calcMaxCalories(){
+      if(entries.length===0){ maxCalPerDayEl.textContent = '—'; return; }
+      const last = parseFloat(entries[entries.length-1].weight);
+      const goal = parseFloat(goalEl.value);
+      if(isNaN(last)||isNaN(goal)){ maxCalPerDayEl.textContent='—'; return; }
+      const now = new Date();
+      const daysLeft = Math.max(1, Math.ceil((targetDate - now)/(1000*60*60*24)));
+      const lbsToLose = Math.max(0, last - goal);
+      const dailyDeficit = (lbsToLose * 3500) / daysLeft;
+
+      let maint = parseFloat(maintKcal.value);
+      if(isNaN(maint) || maint<=0){
+        maint = 12 * last; // very rough
+        maintKcal.value = Math.round(maint);
+      }
+      let maxKcal = maint - dailyDeficit;
+      const floor = 1200; // general floor
+      maxKcal = Math.max(floor, Math.round(maxKcal));
+      maxCalPerDayEl.textContent = String(maxKcal);
+    }
+
+    // ====== INIT ======
+    window.addEventListener('load', ()=>{
+      dateEl.value = todayISO();
+      foodDate.value = todayISO();
+      targetDateLbl.textContent = fmtShort(targetDate);
+
+      loadAll();
+
+      if(!localStorage.getItem(META_KEY)){
+        goalEl.value = '190';
+        localStorage.setItem(META_KEY, JSON.stringify({goal:goalEl.value, maint:''}));
+      }
+
+      refresh();
+    });
+
+    // ====== EVENTS ======
+    addWeightBtn.addEventListener('click', ()=>{
+      const d = dateEl.value || todayISO();
+      const w = parseFloat(weightEl.value);
+      if(!d || isNaN(w)){ alert('Enter date and a valid weight'); return; }
+      entries.push({date:d, weight:w, notes:notesEl.value||''});
+      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+      saveAll(); refresh();
+      dateEl.value=todayISO(); weightEl.value=''; notesEl.value='';
+    });
+
+    saveWeightBtn.addEventListener('click', ()=>{
+      if(editingIndex===null) return;
+      const d = dateEl.value;
+      const w = parseFloat(weightEl.value);
+      if(!d || isNaN(w)){ alert('Enter date and a valid weight'); return; }
+      entries[editingIndex] = {date:d, weight:w, notes:notesEl.value||''};
+      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+      editingIndex=null;
+      saveWeightBtn.style.display='none';
+      addWeightBtn.style.display='inline-block';
+      dateEl.value=todayISO(); weightEl.value=''; notesEl.value='';
+      saveAll(); refresh();
+    });
+
+    document.getElementById('saveGoal').addEventListener('click', ()=>{ saveAll(); refresh(); });
+    document.getElementById('clearGoal').addEventListener('click', ()=>{
+      goalEl.value=''; saveAll(); refresh();
+    });
+    goalEl.addEventListener('change', ()=>{ saveAll(); refresh(); });
+
+    clearAllBtn.addEventListener('click', ()=>{
+      if(!confirm('Clear ALL weight & food data?')) return;
+      entries=[]; foods=[];
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(FOOD_KEY);
+      saveAll(); refresh();
+    });
+
+    exportCsvBtn.addEventListener('click', ()=>{
+      const rows = [['type','date','value1','value2']];
+      entries.forEach(e=>rows.push(['weight',e.date,e.weight,e.notes||'']));
+      foods.forEach(f=>rows.push(['food',f.date,f.name||'',f.kcal||0]));
+      const csv = rows.map(r=>r.map(x=>String(x).includes(',')?`"${String(x).replace(/"/g,'""')}"`:x).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='weight360_export.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    importCsv.addEventListener('change', (ev)=>{
+      const file = ev.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = e=>{
+        const lines = e.target.result.split(/\r?\n/).filter(Boolean);
+        let addW=0, addF=0;
+        for(let i=1;i<lines.length;i++){
+          const cols = parseCSVLine(lines[i]);
+          const type = (cols[0]||'').toLowerCase();
+          if(type==='weight'){
+            const [_,d,w,notes] = cols;
+            const num = parseFloat(w); if(d && !isNaN(num)){ entries.push({date:d,weight:num,notes:notes||''}); addW++; }
+          } else if(type==='food'){
+            const [_,d,name,kcal] = cols;
+            const num = parseFloat(kcal); if(d && !isNaN(num)){ foods.push({date:d,name:name||'',kcal:num}); addF++; }
+          }
+        }
+        entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+        saveAll(); refresh();
+        alert(`Imported ${addW} weight and ${addF} food rows.`);
+        importCsv.value='';
+      };
+      reader.readAsText(file);
+    });
+
+    recalcBtn.addEventListener('click', ()=>{ saveAll(); refresh(); });
+    autoMaint.addEventListener('click', ()=>{
+      const last = entries.length>0 ? parseFloat(entries[entries.length-1].weight) : 200;
+      maintKcal.value = Math.round(12 * last);
+      saveAll(); refresh();
+    });
+
+    addFoodBtn.addEventListener('click', ()=>{
+      const d = foodDate.value || todayISO();
+      const name = foodName.value.trim();
+      const kcal = parseFloat(foodCals.value);
+      if(!d || !name || isNaN(kcal)){ alert('Enter date, food, and calories'); return; }
+      foods.push({date:d,name:name,kcal:kcal});
+      saveAll(); refresh();
+      foodName.value=''; foodCals.value='';
+    });
+
+    // simple CSV parser for our format
+    function parseCSVLine(line){
+      const out=[]; let cur=''; let inQ=false;
+      for(let i=0;i<line.length;i++){
+        const c=line[i];
+        if(c==='"' ){ if(inQ && line[i+1]==='"'){ cur+='"'; i++; } else { inQ=!inQ; } }
+        else if(c===',' && !inQ){ out.push(cur); cur=''; }
+        else cur+=c;
+      }
+      out.push(cur); return out;
+    }
+
+    // sync between tabs
+    window.addEventListener('storage', ()=>{ loadAll(); refresh(); });
+  </script>
+</body>
+</html>
