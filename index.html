@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Weight Tracker</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;color-scheme:dark}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{background:linear-gradient(180deg,#071026 0%, #071827 100%);color:#e6eef8;padding:20px;display:flex;align-items:flex-start;justify-content:center}
+    .wrap{width:100%;max-width:900px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    h1{font-size:1.2rem;margin:0}
+    small{color:var(--muted)}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+    form{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input,button,select,textarea{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;min-height:40px}
+    input[type="date"]{min-width:140px}
+    .left{flex:1 1 380px}
+    .chart-row{display:flex;gap:12px;align-items:flex-start}
+    canvas{flex:1 1 60%;min-height:220px}
+    .stats{flex:1 1 35%;display:flex;flex-direction:column;gap:8px}
+    .stat{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03);font-size:0.9rem}
+    .tiny{font-size:0.8rem;color:var(--muted)}
+    .muted{color:var(--muted)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    @media(max-width:720px){.chart-row{flex-direction:column}.stats{order:2}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Weight Tracker</h1>
+        <small class="tiny">Log weights, watch progress, export CSV — all stored locally</small>
+      </div>
+      <div class="tiny muted">Tip: host this file on GitHub Pages or Netlify</div>
+    </header>
+
+    <section class="card">
+      <form id="entryForm" class="controls" onsubmit="return false;">
+        <input type="date" id="date" required />
+        <input type="number" step="0.1" id="weight" placeholder="Weight (lbs)" required />
+        <input type="text" id="notes" placeholder="Notes (optional)" />
+        <button id="addBtn">Add</button>
+        <button id="updateBtn" style="display:none">Save</button>
+        <button id="clearAll" type="button">Clear All</button>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <label class="tiny muted">Goal</label>
+          <input type="number" step="0.1" id="goal" placeholder="Goal lbs" style="width:120px" />
+        </div>
+      </form>
+    </section>
+
+    <section class="card chart-row">
+      <canvas id="weightChart"></canvas>
+      <div class="stats">
+        <div class="stat">
+          <div class="tiny muted">First recorded</div>
+          <div id="firstVal">—</div>
+        </div>
+        <div class="stat">
+          <div class="tiny muted">Latest</div>
+          <div id="latestVal">—</div>
+        </div>
+        <div class="stat">
+          <div class="tiny muted">Change</div>
+          <div id="changeVal">—</div>
+        </div>
+        <div class="stat">
+          <div class="tiny muted">Avg/week</div>
+          <div id="rateVal">—</div>
+        </div>
+        <div class="stat">
+          <div class="tiny muted">To goal</div>
+          <div id="toGoal">—</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button id="exportCsv">Export CSV</button>
+          <input type="file" id="importCsv" accept=".csv" />
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:1rem;margin:0">Entries</h2>
+        <div class="tiny muted">Click a row to edit</div>
+      </div>
+      <div style="overflow:auto;max-height:260px">
+        <table id="logTable">
+          <thead><tr><th>Date</th><th>Weight</th><th>Notes</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // storage key
+    const KEY = 'weightLog_v1';
+    let entries = [];
+
+    // elements
+    const dateEl = document.getElementById('date');
+    const weightEl = document.getElementById('weight');
+    const notesEl = document.getElementById('notes');
+    const goalEl = document.getElementById('goal');
+    const addBtn = document.getElementById('addBtn');
+    const updateBtn = document.getElementById('updateBtn');
+    const clearAll = document.getElementById('clearAll');
+    const logTableBody = document.querySelector('#logTable tbody');
+    const exportCsvBtn = document.getElementById('exportCsv');
+    const importCsv = document.getElementById('importCsv');
+
+    // stats
+    const firstVal = document.getElementById('firstVal');
+    const latestVal = document.getElementById('latestVal');
+    const changeVal = document.getElementById('changeVal');
+    const rateVal = document.getElementById('rateVal');
+    const toGoal = document.getElementById('toGoal');
+
+    // chart
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    let chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets: [{ label:'Weight', data: [], fill:false, tension:0.2, pointRadius:4 }] },
+      options: {
+        scales: { x: { type:'time', time:{unit:'day', tooltipFormat:'MMM dd'} }, y: { beginAtZero:false } },
+        plugins:{legend:{display:false}},
+        maintainAspectRatio: false,
+      }
+    });
+
+    // helpers
+    function save() { localStorage.setItem(KEY, JSON.stringify(entries)); }
+    function load() {
+      const raw = localStorage.getItem(KEY);
+      entries = raw ? JSON.parse(raw) : [];
+      // ensure date strings sorted asc
+      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+    }
+
+    function renderTable() {
+      logTableBody.innerHTML = '';
+      entries.forEach((e, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${e.date}</td><td>${Number(e.weight).toFixed(1)}</td><td>${(e.notes||'')}</td><td style="text-align:right"><button data-i="${i}" class="deleteBtn">Delete</button></td>`;
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', (ev)=> {
+          // don't trigger when clicking delete
+          if(ev.target.classList.contains('deleteBtn')) return;
+          editEntry(i);
+        });
+        const del = tr.querySelector('.deleteBtn');
+        del.addEventListener('click', (ev)=>{ ev.stopPropagation(); deleteEntry(i);});
+        logTableBody.appendChild(tr);
+      });
+    }
+
+    function renderChart() {
+      chart.data.labels = entries.map(e=>e.date);
+      chart.data.datasets[0].data = entries.map(e=>({x:e.date,y:parseFloat(e.weight)}));
+      chart.update();
+    }
+
+    function renderStats() {
+      if(entries.length===0){ firstVal.textContent='—'; latestVal.textContent='—'; changeVal.textContent='—'; rateVal.textContent='—'; toGoal.textContent='—'; return; }
+      const first = parseFloat(entries[0].weight);
+      const last = parseFloat(entries[entries.length-1].weight);
+      firstVal.textContent = `${first.toFixed(1)} lbs • ${entries[0].date}`;
+      latestVal.textContent = `${last.toFixed(1)} lbs • ${entries[entries.length-1].date}`;
+      const delta = last - first;
+      changeVal.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} lbs`;
+      // avg per week
+      const start = new Date(entries[0].date);
+      const end = new Date(entries[entries.length-1].date);
+      const days = Math.max(1, Math.round((end - start) / (1000*60*60*24)));
+      const weeks = days / 7;
+      const avgWeek = (delta / weeks) || 0;
+      rateVal.textContent = `${avgWeek.toFixed(2)} lbs/week`;
+      // goal
+      const goal = parseFloat(goalEl.value);
+      if(!isNaN(goal)){
+        const remaining = last - goal;
+        const pct = ((last - goal) / last) * 100;
+        toGoal.textContent = `${remaining >= 0 ? Math.abs(remaining).toFixed(1) + ' lbs to go' : 'Goal reached!'}`
+      } else toGoal.textContent = 'Set a goal';
+    }
+
+    function refreshAll() {
+      renderTable();
+      renderChart();
+      renderStats();
+    }
+
+    // add entry
+    addBtn.addEventListener('click', ()=>{
+      const d = dateEl.value || (new Date()).toISOString().slice(0,10);
+      const w = parseFloat(weightEl.value);
+      if(!d || isNaN(w)){ alert('Please enter a valid date and weight'); return; }
+      // if date exists, update instead of duplicate? allow multiple same-date entries by time suffix:
+      entries.push({date:d,weight:w,notes:notesEl.value||''});
+      // sort and save
+      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+      save(); refreshAll();
+      dateEl.value=''; weightEl.value=''; notesEl.value='';
+    });
+
+    function editEntry(index){
+      const e = entries[index];
+      dateEl.value = e.date;
+      weightEl.value = e.weight;
+      notesEl.value = e.notes || '';
+      addBtn.style.display='none';
+      updateBtn.style.display='inline-block';
+      updateBtn.onclick = ()=>{
+        const d = dateEl.value;
+        const w = parseFloat(weightEl.value);
+        if(!d || isNaN(w)){ alert('Please enter a valid date and weight'); return; }
+        entries[index] = {date:d,weight:w,notes:notesEl.value||''};
+        entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+        save(); refreshAll();
+        dateEl.value=''; weightEl.value=''; notesEl.value='';
+        addBtn.style.display='inline-block';
+        updateBtn.style.display='none';
+      };
+    }
+
+    function deleteEntry(index){
+      if(!confirm('Delete this entry?')) return;
+      entries.splice(index,1);
+      save(); refreshAll();
+    }
+
+    clearAll.addEventListener('click', ()=>{
+      if(confirm('Clear ALL entries? This cannot be undone.')){ entries=[]; save(); refreshAll(); }
+    });
+
+    // CSV export/import
+    exportCsvBtn.addEventListener('click', ()=>{
+      if(entries.length===0){ alert('No entries to export'); return; }
+      const rows = [['date','weight','notes'], ...entries.map(e=>[e.date,e.weight, `"${(e.notes||'').replace(/"/g,'""')}"`])];
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'weight_log.csv'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importCsv.addEventListener('change', (ev)=>{
+      const file = ev.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const parsed = [];
+        for(let i=1;i<lines.length;i++){
+          const cols = lines[i].split(',');
+          if(cols.length<2) continue;
+          const date = cols[0].trim();
+          const weight = parseFloat(cols[1]);
+          const notes = cols.slice(2).join(',').replace(/^"|"$/g,'').replace(/""/g,'"');
+          if(!isNaN(weight)) parsed.push({date,weight,notes});
+        }
+        if(parsed.length>0){
+          entries = entries.concat(parsed);
+          entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
+          save(); refreshAll();
+          importCsv.value='';
+          alert('Imported ' + parsed.length + ' rows.');
+        } else alert('No valid rows found in CSV.');
+      };
+      reader.readAsText(file);
+    });
+
+    // load on start
+    window.addEventListener('load', ()=>{
+      load();
+      // set default date to today
+      dateEl.value = new Date().toISOString().slice(0,10);
+      // restore goal if saved
+      const meta = localStorage.getItem(KEY + '_meta');
+      if(meta) try{ goalEl.value = JSON.parse(meta).goal || ''; }catch(e){}
+      // render
+      refreshAll();
+    });
+
+    // remember goal on change
+    goalEl.addEventListener('change', ()=> {
+      const meta = {goal: goalEl.value || ''};
+      localStorage.setItem(KEY + '_meta', JSON.stringify(meta));
+      renderStats();
+    });
+
+    // update stats when entries change in other tabs
+    window.addEventListener('storage', ()=>{ load(); refreshAll(); });
+  </script>
+</body>
+</html>
