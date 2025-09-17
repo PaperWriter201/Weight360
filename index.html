@@ -6,8 +6,8 @@
   <title>Weight360</title>
 
   <!-- Icons -->
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png?v=1">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=2">
   <meta name="theme-color" content="#0f1724">
 
   <!-- Chart.js -->
@@ -47,24 +47,38 @@
     .grow{flex:1 1 200px}
     .right{margin-left:auto}
     .pill{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.06)}
-    table{width:100%;border-collapse:collapse;margin-top:8px}
-    th,td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.06);font-size:.95rem}
+    table{width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed}
+    th,td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.06);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     td.actions{text-align:right;white-space:nowrap}
     .bar{height:12px;border-radius:8px;background:#1f2a44;overflow:hidden}
     .bar>span{display:block;height:100%;background:var(--gold);width:0%}
-
-    /* CHART */
-    #chartWrap { position: relative; height: 320px; width: 100%; }
-    #weightChart { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
-    .chart-row{display:flex;gap:12px;align-items:flex-start}
-    .stats{flex:1 1 35%;display:flex;flex-direction:column;gap:8px}
-    .stat{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
-    @media(max-width:780px){.chart-row{flex-direction:column}}
 
     /* Header logo */
     .brand{display:flex;align-items:center;gap:10px}
     .brand img{height:40px;width:auto;display:block}
     @media(max-width:480px){ .brand img{height:32px} }
+
+    /* CHART FIX: stable height & no overlap */
+    #chartWrap { position: relative; width: 100%; height: 260px; margin-top: 10px; }
+    #weightChart { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display:block; }
+    .chart-row{display:flex;gap:12px;align-items:flex-start}
+    .stats{flex:1 1 35%;display:flex;flex-direction:column;gap:8px}
+    .stat{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
+    @media(max-width:780px){.chart-row{flex-direction:column}}
+
+    /* Icon buttons */
+    .icon-btn{border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.02);padding:4px 8px;border-radius:8px;font-size:.9rem}
+    .icon-btn.edit{color:#a7f3d0}     /* mint */
+    .icon-btn.del{color:#fecaca}      /* soft red */
+
+    /* Summary chips */
+    .chipbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .chip{padding:6px 10px;border-radius:999px;border:1px solid var(--gold);background:rgba(255,255,255,0.03);cursor:pointer}
+    .chip.active{background:rgba(255,209,102,0.15)}
+
+    /* Summary note in weights list */
+    .summary-note{font-style:italic;color:#eab308}
+    .hide{display:none !important}
   </style>
 </head>
 <body>
@@ -76,12 +90,14 @@
             <img src="logo-hero.png" alt="Weight360 logo">
             <h1>Weight360</h1>
           </div>
-          <div class="tiny muted">Private weight & calorie tracker — saved locally on this device</div>
+          <div class="tiny muted">Private weight, calories, water & exercise — saved locally on this device</div>
           <div class="tiny muted" style="margin-top:6px">Target date: <b id="targetDateLbl">Jan 1, 2026</b></div>
           <div class="row" style="margin-top:8px">
             <input id="nameInput" placeholder="Your name" style="width:160px">
-            <button id="saveName" type="button">Set</button>
-            <button id="clearName" type="button">Clear</button>
+            <span id="nameBtns">
+              <button id="saveName" type="button">Set</button>
+              <button id="clearName" type="button">Clear</button>
+            </span>
             <span class="pill tiny">Hi, <b id="nameDisplay">—</b></span>
           </div>
         </div>
@@ -107,8 +123,8 @@
       </div>
     </header>
 
-    <!-- WEIGHT TRACKER -->
-    <details class="card" open>
+    <!-- WEIGHT TRACKER (closed by default) -->
+    <details class="card">
       <summary>Weight Tracker</summary>
       <div class="content">
         <div class="row">
@@ -126,7 +142,7 @@
           </div>
           <div>
             <button id="addWeight" type="button">Add</button>
-            <button id="saveWeight" type="button" style="display:none">Save</button>
+            <button id="saveWeight" type="button" class="hide">Save</button>
           </div>
         </div>
         <div class="row" style="margin-top:10px;align-items:center;gap:8px">
@@ -155,12 +171,14 @@
           </div>
         </div>
         <div class="row tiny" style="margin-top:8px">
-          <span class="pill">Today total: <b id="todayTotal">0</b> kcal</span>
+          <span class="pill">Today food: <b id="todayTotal">0</b> kcal</span>
+          <span class="pill">Today exercise: <b id="todayExCals">0</b> kcal</span>
+          <span class="pill">Net calories: <b id="todayNetCals">—</b></span>
           <span class="pill">Remaining vs max: <b id="todayRemain">—</b></span>
         </div>
         <div style="overflow:auto;max-height:240px;margin-top:10px">
           <table id="foodTable">
-            <thead><tr><th>Date</th><th>Food</th><th>Calories</th><th></th></tr></thead>
+            <thead><tr><th style="width:24%">Date</th><th style="width:46%">Food</th><th style="width:20%">Calories</th><th style="width:10%"></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -176,7 +194,7 @@
         </div>
         <div style="overflow:auto;max-height:240px;margin-top:10px">
           <table id="waterTable">
-            <thead><tr><th>Date</th><th>Cups</th><th></th></tr></thead>
+            <thead><tr><th style="width:40%">Date</th><th style="width:40%">Cups</th><th style="width:20%"></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -184,28 +202,24 @@
     </details>
 
     <!-- EXERCISE -->
-<details class="card">
-  <summary>Exercise</summary>
-  <div class="content">
-    <div class="row">
-      <div><label class="tiny muted">Date</label><br/><input type="date" id="exDate"></div>
-      <div class="grow"><label class="tiny muted">Activity</label><br/><input id="exActivity" placeholder="Walking, Gym, etc."></div>
-      <div><label class="tiny muted">Miles</label><br/><input type="number" step="0.1" id="exMiles" placeholder="2.5"></div>
-      <div><label class="tiny muted">Calories Burned</label><br/><input type="number" id="exCals" placeholder="200"></div>
-      <div><button id="addEx" type="button">Add Exercise</button></div>
-    </div>
-    <div class="row tiny" style="margin-top:8px">
-      <span class="pill">Today Exercise Calories: <b id="todayExCals">0</b></span>
-      <span class="pill">Net Calories: <b id="todayNetCals">—</b></span>
-    </div>
-    <div style="overflow:auto;max-height:240px;margin-top:10px">
-      <table id="exTable">
-        <thead><tr><th>Date</th><th>Activity</th><th>Miles</th><th>Calories</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-</details>
+    <details class="card">
+      <summary>Exercise</summary>
+      <div class="content">
+        <div class="row">
+          <div><label class="tiny muted">Date</label><br/><input type="date" id="exDate"></div>
+          <div class="grow"><label class="tiny muted">Activity</label><br/><input id="exActivity" placeholder="Walking, Gym, etc."></div>
+          <div><label class="tiny muted">Miles</label><br/><input type="number" step="0.1" id="exMiles" placeholder="2.5"></div>
+          <div><label class="tiny muted">Calories Burned</label><br/><input type="number" id="exCals" placeholder="200"></div>
+          <div><button id="addEx" type="button">Add Exercise</button></div>
+        </div>
+        <div style="overflow:auto;max-height:240px;margin-top:10px">
+          <table id="exTable">
+            <thead><tr><th style="width:24%">Date</th><th style="width:36%">Activity</th><th style="width:20%">Miles</th><th style="width:10%">Cals</th><th style="width:10%"></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </details>
 
     <!-- CHART + STATS -->
     <details class="card">
@@ -227,66 +241,56 @@
       </div>
     </details>
 
-    <!-- WEIGHT ENTRIES -->
+    <!-- DAILY SUMMARY LOG -->
     <details class="card">
-      <summary>Weight Entries</summary>
+      <summary>Daily Summary Log</summary>
       <div class="content">
-        <div class="tiny muted">Click <b>Edit</b> to load a row into the form above, then press <b>Save</b>.</div>
-        <div style="overflow:auto;max-height:260px">
-          <table id="logTable">
-            <thead><tr><th>Date</th><th>Weight</th><th>Notes</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
+        <div class="tiny muted">These are read-only rollups for each day. Click a date chip to view.</div>
+        <div id="summaryChips" class="chipbar"></div>
+        <div id="summaryView" style="margin-top:10px">
+          <div class="row">
+            <span class="pill">Date: <b id="sumDate">—</b></span>
+            <span class="pill">Weight: <b id="sumWeight">—</b></span>
+            <span class="pill">Food: <b id="sumFood">0</b> kcal</span>
+            <span class="pill">Exercise: <b id="sumEx">0</b> kcal</span>
+            <span class="pill">Net: <b id="sumNetCals">—</b> kcal</span>
+            <span class="pill">Water: <b id="sumWater">0</b> cups</span>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <small class="muted">To change a day’s data, edit entries in the sections above; summaries update automatically.</small>
+          </div>
         </div>
-        <div class="row" style="margin-top:8px">
-          <button id="clearAll" type="button">Clear ALL data</button>
-          <small class="muted">Data is stored locally in this browser.</small>
-        </div>
-        <div class="row" style="margin-top:8px">
+        <div class="row" style="margin-top:12px">
           <button id="exportCsv" type="button">Export CSV</button>
           <input type="file" id="importCsv" accept=".csv" />
+          <div class="right">
+            <button id="clearAll" type="button">Clear ALL data</button>
+          </div>
         </div>
       </div>
     </details>
   </div>
-
-  <!-- DAILY SUMMARY -->
-<details class="card">
-  <summary>Daily Summary</summary>
-  <div class="content">
-    <div id="summaryWrap">
-      <p class="tiny muted">At the end of each day, totals are captured here and saved under Weight Entries.</p>
-      <div class="row">
-        <span class="pill">Weight: <b id="sumWeight">—</b></span>
-        <span class="pill">Calories (Net): <b id="sumNetCals">—</b></span>
-        <span class="pill">Water: <b id="sumWater">—</b> cups</span>
-        <span class="pill">Exercise: <b id="sumEx">—</b></span>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button id="closeDay" type="button">Save Day & Reset</button>
-      </div>
-    </div>
-  </div>
-</details>
-</div>
 
   <script>
     // ===== Keys & helpers =====
     const KEY_W = 'w360_weights';
     const KEY_F = 'w360_foods';
     const KEY_H = 'w360_water';
+    const KEY_X = 'w360_exercise';
     const KEY_META = 'w360_meta';
     const todayISO = () => new Date().toISOString().slice(0,10);
 
     // ===== State =====
-    let weights = [];   // [{date, weight, notes}]
-    let foods = [];     // [{date, name, kcal}]
-    let waters = [];    // [{date, cups}]
+    let weights = [];    // [{date, weight, notes, _summary?}]
+    let foods = [];      // [{date, name, kcal}]
+    let waters = [];     // [{date, cups}]
+    let exercises = [];  // [{date, activity, miles, kcal}]
     let editingWeightIndex = null;
     let editingFoodIndex = null;
     let editingWaterIndex = null;
+    let editingExIndex = null;
 
-    // ===== Elements (cache) =====
+    // ===== Elements =====
     const dateEl = document.getElementById('date');
     const weightEl = document.getElementById('weight');
     const notesEl = document.getElementById('notes');
@@ -307,11 +311,20 @@
     const autoMaint = document.getElementById('autoMaint');
 
     const todayTotal = document.getElementById('todayTotal');
+    const todayExCals = document.getElementById('todayExCals');
+    const todayNetCals = document.getElementById('todayNetCals');
     const todayRemain = document.getElementById('todayRemain');
 
     const logTBody = document.querySelector('#logTable tbody');
     const foodTBody = document.querySelector('#foodTable tbody');
     const waterTBody = document.querySelector('#waterTable tbody');
+    const exTBody = document.querySelector('#exTable tbody');
+
+    const exDate = document.getElementById('exDate');
+    const exActivity = document.getElementById('exActivity');
+    const exMiles = document.getElementById('exMiles');
+    const exCals = document.getElementById('exCals');
+    const addExBtn = document.getElementById('addEx');
 
     const importCsv = document.getElementById('importCsv');
     const exportCsvBtn = document.getElementById('exportCsv');
@@ -332,15 +345,26 @@
 
     // Name
     const nameInput = document.getElementById('nameInput');
+    const nameBtns = document.getElementById('nameBtns');
     const saveNameBtn = document.getElementById('saveName');
     const clearNameBtn = document.getElementById('clearName');
     const nameDisplay = document.getElementById('nameDisplay');
+
+    // Summary (log) UI
+    const chipsWrap = document.getElementById('summaryChips');
+    const sumDate = document.getElementById('sumDate');
+    const sumWeight = document.getElementById('sumWeight');
+    const sumFood = document.getElementById('sumFood');
+    const sumEx = document.getElementById('sumEx');
+    const sumNet = document.getElementById('sumNetCals');
+    const sumWater = document.getElementById('sumWater');
 
     // ===== Storage =====
     function saveAll(){
       localStorage.setItem(KEY_W, JSON.stringify(weights));
       localStorage.setItem(KEY_F, JSON.stringify(foods));
       localStorage.setItem(KEY_H, JSON.stringify(waters));
+      localStorage.setItem(KEY_X, JSON.stringify(exercises));
       const meta = JSON.parse(localStorage.getItem(KEY_META) || '{}');
       meta.goal = goalEl.value || '';
       meta.maint = maintKcal?.value || '';
@@ -348,14 +372,37 @@
       localStorage.setItem(KEY_META, JSON.stringify(meta));
     }
     function loadAll(){
-      try{ weights = JSON.parse(localStorage.getItem(KEY_W) || '[]'); } catch{ weights=[]; }
-      try{ foods   = JSON.parse(localStorage.getItem(KEY_F) || '[]'); } catch{ foods=[]; }
-      try{ waters  = JSON.parse(localStorage.getItem(KEY_H) || '[]'); } catch{ waters=[]; }
+      try{ weights   = JSON.parse(localStorage.getItem(KEY_W) || '[]'); } catch{ weights=[]; }
+      try{ foods     = JSON.parse(localStorage.getItem(KEY_F) || '[]'); } catch{ foods=[]; }
+      try{ waters    = JSON.parse(localStorage.getItem(KEY_H) || '[]'); } catch{ waters=[]; }
+      try{ exercises = JSON.parse(localStorage.getItem(KEY_X) || '[]'); } catch{ exercises=[]; }
       const meta = JSON.parse(localStorage.getItem(KEY_META) || '{}');
-      if(goalEl) goalEl.value = meta.goal || goalEl.value || '';
+      goalEl.value = meta.goal || goalEl.value || '';
       if(maintKcal) maintKcal.value = meta.maint || '';
-      if(nameInput && nameDisplay && meta.name){ nameInput.value = meta.name; nameDisplay.textContent = meta.name; }
+      if(meta.name){ nameInput.value = meta.name; nameDisplay.textContent = meta.name; nameBtns.classList.add('hide'); }
+      // keep ordered by date
       weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
+      foods.sort((a,b)=> new Date(a.date) - new Date(b.date));
+      waters.sort((a,b)=> new Date(a.date) - new Date(b.date));
+      exercises.sort((a,b)=> new Date(a.date) - new Date(b.date));
+    }
+
+    // ===== Helpers (totals) =====
+    function totalsForDate(d){
+      const foodKcal = foods.filter(f=>f.date===d).reduce((s,f)=>s+(+f.kcal||0),0);
+      const exKcal   = exercises.filter(x=>x.date===d).reduce((s,x)=>s+(+x.kcal||0),0);
+      const cups     = waters.filter(w=>w.date===d).reduce((s,w)=>s+(+w.cups||0),0);
+      const weightRow= weights.filter(w=> w.date===d && !w._summary).slice(-1)[0];
+      const net      = Math.max(0, foodKcal - exKcal);
+      return {foodKcal, exKcal, cups, net, weightVal: weightRow? +weightRow.weight : null};
+    }
+    function distinctDays(){
+      const set = new Set();
+      weights.forEach(w=>set.add(w.date));
+      foods.forEach(f=>set.add(f.date));
+      waters.forEach(w=>set.add(w.date));
+      exercises.forEach(x=>set.add(x.date));
+      return Array.from(set).sort((a,b)=> new Date(b)-new Date(a)); // newest first
     }
 
     // ===== Rendering =====
@@ -364,18 +411,20 @@
       weights.forEach((e,i)=>{
         const tr = document.createElement('tr');
         tr.dataset.index = i;
+        const isSummary = e._summary === true;
         tr.innerHTML = `
           <td>${e.date}</td>
-          <td>${Number(e.weight).toFixed(1)}</td>
-          <td>${e.notes||''}</td>
+          <td>${isSummary ? '<span class="summary-note">—</span>' : Number(e.weight).toFixed(1)}</td>
+          <td>${isSummary ? `<span class="summary-note">${e.notes||''}</span>` : (e.notes||'')}</td>
           <td class="actions">
-            <button class="editW">Edit</button>
-            <button class="delW">Delete</button>
+            ${isSummary ? '' : '<button class="icon-btn edit editW" title="Edit">✏️</button>'}
+            <button class="icon-btn del delW" title="Delete">🗑️</button>
           </td>`;
         logTBody.appendChild(tr);
       });
-      const last = weights.length ? weights[weights.length-1].weight : '';
-      currentWeightLbl.textContent = last!=='' ? Number(last).toFixed(1) : '—';
+      const nonSummary = weights.filter(w=>!w._summary);
+      const last = nonSummary.length ? nonSummary[nonSummary.length-1].weight : '';
+      currentWeightLbl.textContent = (last!=='' && !isNaN(last)) ? Number(last).toFixed(1) : '—';
       renderStats();
     }
 
@@ -389,20 +438,12 @@
           <td>${f.name||''}</td>
           <td>${Number(f.kcal||0)}</td>
           <td class="actions">
-            <button class="editF">Edit</button>
-            <button class="delF">Delete</button>
+            <button class="icon-btn edit editF" title="Edit">✏️</button>
+            <button class="icon-btn del delF" title="Delete">🗑️</button>
           </td>`;
         foodTBody.appendChild(tr);
       });
-
-      const d = foodDate.value || todayISO();
-      const todays = foods.filter(f=> f.date === d);
-      const total = todays.reduce((s,f)=> s + (parseFloat(f.kcal)||0), 0);
-      if(todayTotal) todayTotal.textContent = String(Math.round(total));
-
-      const max =
-        parseFloat(document.getElementById('maxCalPerDay')?.textContent || maintKcal?.value || '0') || 0;
-      if(todayRemain) todayRemain.textContent = max>0 ? `${Math.round(max - total)} kcal` : '—';
+      updateFoodExerciseTotals();
     }
 
     function renderWater(){
@@ -414,15 +455,75 @@
           <td>${w.date}</td>
           <td>${Number(w.cups)}</td>
           <td class="actions">
-            <button class="editH">Edit</button>
-            <button class="delH">Delete</button>
+            <button class="icon-btn edit editH" title="Edit">✏️</button>
+            <button class="icon-btn del delH" title="Delete">🗑️</button>
           </td>`;
         waterTBody.appendChild(tr);
       });
+      const d = foodDate.value || todayISO();
+      const t = totalsForDate(d);
+      document.getElementById('todayWater').textContent = String(t.cups);
+    }
 
-      const today = todayISO();
-      const total = waters.filter(w=> w.date===today).reduce((s,w)=> s + (parseFloat(w.cups)||0), 0);
-      const tw = document.getElementById('todayWater'); if(tw) tw.textContent = String(total);
+    function renderExercise(){
+      exTBody.innerHTML = '';
+      exercises.forEach((x,i)=>{
+        const tr = document.createElement('tr');
+        tr.dataset.index = i;
+        tr.innerHTML = `
+          <td>${x.date}</td>
+          <td>${x.activity||''}</td>
+          <td>${Number(x.miles||0)}</td>
+          <td>${Number(x.kcal||0)}</td>
+          <td class="actions">
+            <button class="icon-btn edit editX" title="Edit">✏️</button>
+            <button class="icon-btn del delX" title="Delete">🗑️</button>
+          </td>`;
+        exTBody.appendChild(tr);
+      });
+      updateFoodExerciseTotals();
+    }
+
+    function updateFoodExerciseTotals(){
+      const d = foodDate.value || todayISO();
+      const t = totalsForDate(d);
+      todayTotal.textContent = String(Math.round(t.foodKcal));
+      todayExCals.textContent = String(Math.round(t.exKcal));
+      todayNetCals.textContent = String(Math.round(t.net));
+      const max =
+        parseFloat(document.getElementById('maxCalPerDay')?.textContent || maintKcal?.value || '0') || 0;
+      todayRemain.textContent = max>0 ? `${Math.round(max - t.net)} kcal` : '—';
+      renderSummaryChips();
+      renderSummaryView(d);
+    }
+
+    // Summary chips & view
+    function renderSummaryChips(){
+      const days = distinctDays();
+      chipsWrap.innerHTML = '';
+      days.forEach((d,idx)=>{
+        const chip = document.createElement('button');
+        chip.className = 'chip' + (idx===0 ? ' active' : '');
+        const mmdd = new Date(d); const label = (mmdd.getMonth()+1)+'/'+mmdd.getDate();
+        chip.textContent = label;
+        chip.title = d;
+        chip.onclick = ()=>{
+          chipsWrap.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+          chip.classList.add('active');
+          renderSummaryView(d);
+        };
+        chipsWrap.appendChild(chip);
+      });
+      if(days.length){ renderSummaryView(days[0]); }
+    }
+    function renderSummaryView(d){
+      const t = totalsForDate(d);
+      sumDate.textContent = d;
+      sumWeight.textContent = (t.weightVal!=null && !isNaN(t.weightVal)) ? t.weightVal.toFixed(1)+' lbs' : '—';
+      sumFood.textContent = String(Math.round(t.foodKcal));
+      sumEx.textContent = String(Math.round(t.exKcal));
+      sumNet.textContent = String(Math.round(t.net));
+      sumWater.textContent = String(t.cups);
     }
 
     // ===== Chart.js =====
@@ -431,8 +532,9 @@
       const ctx = document.getElementById('weightChart');
       if(!ctx) return;
 
-      const labels = weights.map(w => w.date);
-      const series = weights.map(w => Number(w.weight));
+      const nonSummary = weights.filter(w=>!w._summary);
+      const labels = nonSummary.map(w => w.date);
+      const series = nonSummary.map(w => Number(w.weight));
       const goal = parseFloat(goalEl.value);
 
       const datasets = [];
@@ -463,12 +565,13 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          layout: { padding: { top: 6, right: 6, bottom: 6, left: 6 } },
           scales: {
-            x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+            x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,0.06)' } },
             y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.06)' } }
           },
           plugins: {
-            legend: { labels: { color: '#e6eef8' } },
+            legend: { position: 'bottom', labels: { color: '#e6eef8' } },
             tooltip: { mode: 'nearest', intersect: false }
           }
         }
@@ -485,17 +588,18 @@
       const rateVal = document.getElementById('rateVal');
       const daysLeftVal = document.getElementById('daysLeftVal');
 
-      if(!weights.length){
+      const nonSummary = weights.filter(w=>!w._summary);
+      if(!nonSummary.length){
         firstVal.textContent = latestVal.textContent = changeVal.textContent = rateVal.textContent = '—';
         daysLeftVal.textContent = '—';
         return;
       }
 
-      const first = weights[0];
-      const last  = weights[weights.length-1];
+      const first = nonSummary[0];
+      const last  = nonSummary[nonSummary.length-1];
 
-      firstVal.textContent  = `${first.weight.toFixed(1)} lbs (${first.date})`;
-      latestVal.textContent = `${last.weight.toFixed(1)} lbs (${last.date})`;
+      firstVal.textContent  = `${Number(first.weight).toFixed(1)} lbs (${first.date})`;
+      latestVal.textContent = `${Number(last.weight).toFixed(1)} lbs (${last.date})`;
       const diff = last.weight - first.weight;
       changeVal.textContent = (diff>=0?'+':'') + diff.toFixed(1) + ' lbs';
 
@@ -512,20 +616,18 @@
     }
 
     function renderGoalAndProgress(){
-      if(hdrGoal) hdrGoal.textContent = goalEl.value ? `${parseFloat(goalEl.value).toFixed(0)} lbs` : '—';
-
-      const first   = weights.length ? parseFloat(weights[0].weight) : NaN;
-      const current = weights.length ? parseFloat(weights[weights.length-1].weight) : NaN;
+      hdrGoal.textContent = goalEl.value ? `${parseFloat(goalEl.value).toFixed(0)} lbs` : '—';
+      const nonSummary = weights.filter(w=>!w._summary);
+      const first   = nonSummary.length ? parseFloat(nonSummary[0].weight) : NaN;
+      const current = nonSummary.length ? parseFloat(nonSummary[nonSummary.length-1].weight) : NaN;
       const goal    = parseFloat(goalEl.value);
 
       const sectionBar = document.getElementById('progressBar');
       const sectionLbl = document.getElementById('progressLabel');
 
       if(isNaN(first) || isNaN(current) || isNaN(goal)){
-        headerBar.style.width = '0%';
-        headerPct.textContent = '0%';
-        if(sectionBar) sectionBar.style.width = '0%';
-        if(sectionLbl) sectionLbl.textContent = '0%';
+        headerBar.style.width = '0%'; headerPct.textContent = '0%';
+        sectionBar.style.width = '0%'; sectionLbl.textContent = '0%';
         updateChart();
         return;
       }
@@ -535,8 +637,8 @@
 
       headerBar.style.width = pct.toFixed(1) + '%';
       headerPct.textContent = pct.toFixed(1) + '%';
-      if(sectionBar) sectionBar.style.width = pct.toFixed(1) + '%';
-      if(sectionLbl) sectionLbl.textContent = pct.toFixed(1) + '%';
+      sectionBar.style.width = pct.toFixed(1) + '%';
+      sectionLbl.textContent = pct.toFixed(1) + '%';
 
       updateChart();
     }
@@ -545,118 +647,162 @@
       renderWeights();
       renderFoods();
       renderWater();
+      renderExercise();
       renderGoalAndProgress();
     }
 
     // ===== Events =====
     window.addEventListener('load', ()=>{
-      if(dateEl) dateEl.value = todayISO();
-      if(foodDate) foodDate.value = todayISO();
-
-      const legacyName = localStorage.getItem('w360_name');
-      if(legacyName && nameInput && nameDisplay){
-        nameInput.value = legacyName; nameDisplay.textContent = legacyName;
-      }
-
+      dateEl.value = todayISO();
+      foodDate.value = todayISO();
+      exDate.value = todayISO();
       loadAll();
       refresh();
     });
 
+    // Name controls hide/show
+    saveNameBtn.onclick = ()=>{ nameDisplay.textContent = nameInput.value || '—'; nameBtns.classList.add('hide'); saveAll(); };
+    clearNameBtn.onclick = ()=>{ nameInput.value=''; nameDisplay.textContent='—'; nameBtns.classList.remove('hide'); saveAll(); };
+
     // Weight add/save
-    addWeightBtn.addEventListener('click', ()=>{
+    addWeightBtn.onclick = ()=>{
       const d = dateEl.value || todayISO();
       const w = parseFloat(weightEl.value);
       if(!d || isNaN(w)) return alert('Enter a date and valid weight');
 
       if(editingWeightIndex !== null){
         weights[editingWeightIndex] = {date:d, weight:w, notes:notesEl.value||''};
-        editingWeightIndex = null; saveWeightBtn.style.display='none'; addWeightBtn.style.display='inline-block';
+        editingWeightIndex = null; saveWeightBtn.classList.add('hide'); addWeightBtn.classList.remove('hide');
       } else {
         weights.push({date:d, weight:w, notes:notesEl.value||''});
       }
       weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
       weightEl.value=''; notesEl.value='';
       saveAll(); refresh();
-    });
-    saveWeightBtn.addEventListener('click', ()=>{
+    };
+    saveWeightBtn.onclick = ()=>{
       const i = editingWeightIndex; if(i===null || i<0 || i>=weights.length) return alert('Select a row to edit first');
       const d = dateEl.value; const w = parseFloat(weightEl.value);
       if(!d || isNaN(w)) return alert('Enter a date and valid weight');
       weights[i] = {date:d, weight:w, notes:notesEl.value||''};
       weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
-      editingWeightIndex = null; saveWeightBtn.style.display='none'; addWeightBtn.style.display='inline-block';
+      editingWeightIndex = null; saveWeightBtn.classList.add('hide'); addWeightBtn.classList.remove('hide');
       weightEl.value=''; notesEl.value='';
       saveAll(); refresh();
-    });
+    };
 
-    // Food add/save
-    addFoodBtn.addEventListener('click', ()=>{
+    // Food add
+    addFoodBtn.onclick = ()=>{
       const d = foodDate.value || todayISO();
       const name = foodName.value || 'Quick entry';
       const kcal = parseFloat(foodCals.value);
       if(!d || isNaN(kcal)) return alert('Enter date and calories');
-
-      if(editingFoodIndex !== null){
-        foods[editingFoodIndex] = {date:d, name, kcal};
-        editingFoodIndex = null;
-      } else {
-        foods.push({date:d, name, kcal});
-      }
+      foods.push({date:d, name, kcal});
       foodName.value=''; foodCals.value='';
       saveAll(); refresh();
-    });
+    };
 
-    // Header quick: weight / calories / water
-    quickWeightBtn.addEventListener('click', ()=>{
+    // Quick header adders
+    quickWeightBtn.onclick = ()=>{
       const v = parseFloat(quickWeight.value);
       if(isNaN(v)) return alert('Enter a weight');
       const d = todayISO();
       weights.push({date:d, weight:v, notes:''});
       weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
-      quickWeight.value='';
-      saveAll(); refresh();
-    });
-    quickCaloriesBtn.addEventListener('click', ()=>{
+      quickWeight.value=''; saveAll(); refresh();
+    };
+    quickCaloriesBtn.onclick = ()=>{
       const cals = parseFloat(quickCalories.value);
       if(isNaN(cals)) return alert('Enter calories');
       foods.push({date:todayISO(), name:'Quick entry', kcal:cals});
-      quickCalories.value='';
-      saveAll(); refresh();
-    });
-    quickWaterBtn.addEventListener('click', ()=>{
+      quickCalories.value=''; saveAll(); refresh();
+    };
+    quickWaterBtn.onclick = ()=>{
       const cups = parseFloat(quickWater.value);
       if(isNaN(cups)) return alert('Enter water in cups');
-      const d = todayISO();
-      if(editingWaterIndex !== null){
-        waters[editingWaterIndex] = {date:d, cups};
-        editingWaterIndex = null;
-      } else {
-        waters.push({date:d, cups});
-      }
-      quickWater.value='';
-      saveAll(); refresh();
-    });
+      waters.push({date:todayISO(), cups});
+      quickWater.value=''; saveAll(); refresh();
+    };
 
-    // Goal & Name
-    saveGoalBtn.addEventListener('click', ()=>{ saveAll(); refresh(); });
-    clearGoalBtn.addEventListener('click', ()=>{ goalEl.value=''; saveAll(); refresh(); });
-    saveNameBtn.addEventListener('click', ()=>{ nameDisplay.textContent = nameInput.value || '—'; saveAll(); });
-    clearNameBtn.addEventListener('click', ()=>{ nameInput.value=''; nameDisplay.textContent='—'; saveAll(); });
+    // Exercise add
+    addExBtn.onclick = ()=>{
+      const d = exDate.value || todayISO();
+      const act = exActivity.value || 'Exercise';
+      const miles = parseFloat(exMiles.value)||0;
+      const kcal = parseFloat(exCals.value)||0;
+      if(!d) return alert('Enter a date');
+      exercises.push({date:d, activity:act, miles, kcal});
+      exActivity.value=''; exMiles.value=''; exCals.value='';
+      saveAll(); refresh();
+    };
 
     // Auto maintenance estimate (12 × current lbs)
-    autoMaint.addEventListener('click', ()=>{
-      const current = weights.length ? parseFloat(weights[weights.length-1].weight) : NaN;
+    autoMaint.onclick = ()=>{
+      const nonSummary = weights.filter(w=>!w._summary);
+      const current = nonSummary.length ? parseFloat(nonSummary[nonSummary.length-1].weight) : NaN;
       if(isNaN(current)) return alert('Add a weight entry first.');
       maintKcal.value = Math.round(current * 12);
       saveAll(); refresh();
+    };
+
+    // Tables: edit/delete (delegation)
+    logTBody.addEventListener('click',(e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return;
+      const idx = +tr.dataset.index;
+      if(e.target.classList.contains('editW')){
+        const row = weights[idx];
+        editingWeightIndex = idx;
+        dateEl.value = row.date; weightEl.value = row.weight; notesEl.value = row.notes||'';
+        addWeightBtn.classList.add('hide'); saveWeightBtn.classList.remove('hide');
+      } else if(e.target.classList.contains('delW')){
+        if(confirm('Delete this entry?')){ weights.splice(idx,1); saveAll(); refresh(); }
+      }
+    });
+    foodTBody.addEventListener('click',(e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return;
+      const idx = +tr.dataset.index;
+      if(e.target.classList.contains('editF')){
+        const row = foods[idx];
+        foodDate.value = row.date; foodName.value = row.name||''; foodCals.value = row.kcal||'';
+        foods.splice(idx,1); // load to form; remove old
+        saveAll(); refresh();
+      } else if(e.target.classList.contains('delF')){
+        if(confirm('Delete this item?')){ foods.splice(idx,1); saveAll(); refresh(); }
+      }
+    });
+    waterTBody.addEventListener('click',(e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return;
+      const idx = +tr.dataset.index;
+      if(e.target.classList.contains('editH')){
+        const row = waters[idx];
+        quickWater.value = row.cups;
+        waters.splice(idx,1);
+        saveAll(); refresh();
+      } else if(e.target.classList.contains('delH')){
+        if(confirm('Delete this water entry?')){ waters.splice(idx,1); saveAll(); refresh(); }
+      }
+    });
+    exTBody.addEventListener('click',(e)=>{
+      const tr = e.target.closest('tr'); if(!tr) return;
+      const idx = +tr.dataset.index;
+      if(e.target.classList.contains('editX')){
+        const row = exercises[idx];
+        exDate.value = row.date; exActivity.value = row.activity||''; exMiles.value = row.miles||''; exCals.value = row.kcal||'';
+        exercises.splice(idx,1);
+        saveAll(); refresh();
+      } else if(e.target.classList.contains('delX')){
+        if(confirm('Delete this exercise?')){ exercises.splice(idx,1); saveAll(); refresh(); }
+      }
     });
 
-    // Export/Import CSV
-    exportCsvBtn.addEventListener('click', ()=>{
-      const rows = [['type','date','value1','value2']];
-      weights.forEach(e=> rows.push(['weight', e.date, e.weight, e.notes||'']));
-      foods.forEach(f  => rows.push(['food',   f.date, f.name||'', f.kcal||0]));
-      waters.forEach(h => rows.push(['water',  h.date, h.cups||0, '' ]));
+    // Export/Import CSV (includes all types)
+    exportCsvBtn.onclick = ()=>{
+      const rows = [['type','date','value1','value2','value3']];
+      weights.forEach(e=> rows.push(['weight', e.date, e.weight, e.notes||'', e._summary?'summary':'']));
+      foods.forEach(f  => rows.push(['food',   f.date, f.name||'', f.kcal||0, '']));
+      waters.forEach(h => rows.push(['water',  h.date, h.cups||0, '', '' ]));
+      exercises.forEach(x=> rows.push(['exercise', x.date, x.activity||'', x.miles||0, x.kcal||0]));
+
       const csv = rows.map(r =>
         r.map(x => String(x).includes(',') ? `"${String(x).replace(/"/g,'""')}"` : x).join(',')
       ).join('\n');
@@ -664,7 +810,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = 'weight360_export.csv';
       a.click(); URL.revokeObjectURL(url);
-    });
+    };
     importCsv.addEventListener('change', ev=>{
       const file = ev.target.files[0]; if(!file) return;
       const reader = new FileReader();
@@ -674,19 +820,24 @@
           const cols = parseCSVLine(lines[i]);
           const type = (cols[0]||'').toLowerCase();
           if(type==='weight'){
-            const [_,d,w,notes] = cols; const num = parseFloat(w);
-            if(d && !isNaN(num)) weights.push({date:d, weight:num, notes:notes||''});
+            const [_,d,w,notes,flag] = cols; const num = parseFloat(w);
+            if(d && !isNaN(num)) weights.push({date:d, weight:num, notes:notes||'', _summary: flag==='summary'});
           } else if(type==='food'){
             const [_,d,name,kcal] = cols; const num = parseFloat(kcal);
             if(d && !isNaN(num)) foods.push({date:d, name:name||'', kcal:num});
           } else if(type==='water'){
             const [_,d,cups] = cols; const num = parseFloat(cups);
             if(d && !isNaN(num)) waters.push({date:d, cups:num});
+          } else if(type==='exercise'){
+            const [_,d,act,miles,kcal] = cols; const m = parseFloat(miles)||0; const k = parseFloat(kcal)||0;
+            if(d) exercises.push({date:d, activity:act||'', miles:m, kcal:k});
           }
         }
         weights.sort((a,b)=> new Date(a.date)-new Date(b.date));
-        saveAll(); refresh();
-        importCsv.value='';
+        foods.sort((a,b)=> new Date(a.date)-new Date(b.date));
+        waters.sort((a,b)=> new Date(a.date)-new Date(b.date));
+        exercises.sort((a,b)=> new Date(a.date)-new Date(b.date));
+        saveAll(); refresh(); importCsv.value='';
       };
       reader.readAsText(file);
     });
@@ -701,54 +852,42 @@
       out.push(cur); return out;
     }
 
-    // Event delegation for Edit/Delete (reliable)
-    logTBody.addEventListener('click', (e)=>{
-      const tr = e.target.closest('tr'); if(!tr) return;
-      const idx = +tr.dataset.index;
-      if(e.target.classList.contains('editW')){
-        const row = weights[idx];
-        editingWeightIndex = idx;
-        dateEl.value = row.date; weightEl.value = row.weight; notesEl.value = row.notes||'';
-        addWeightBtn.style.display='none'; saveWeightBtn.style.display='inline-block';
-      } else if(e.target.classList.contains('delW')){
-        if(confirm('Delete this weight entry?')){ weights.splice(idx,1); saveAll(); refresh(); }
-      }
-    });
-    foodTBody.addEventListener('click', (e)=>{
-      const tr = e.target.closest('tr'); if(!tr) return;
-      const idx = +tr.dataset.index;
-      if(e.target.classList.contains('editF')){
-        const row = foods[idx];
-        editingFoodIndex = idx;
-        foodDate.value = row.date; foodName.value = row.name||''; foodCals.value = row.kcal||'';
-      } else if(e.target.classList.contains('delF')){
-        if(confirm('Delete this food item?')){ foods.splice(idx,1); saveAll(); refresh(); }
-      }
-    });
-    waterTBody.addEventListener('click', (e)=>{
-      const tr = e.target.closest('tr'); if(!tr) return;
-      const idx = +tr.dataset.index;
-      if(e.target.classList.contains('editH')){
-        const row = waters[idx];
-        editingWaterIndex = idx;
-        quickWater.value = row.cups;
-      } else if(e.target.classList.contains('delH')){
-        if(confirm('Delete this water entry?')){ waters.splice(idx,1); saveAll(); refresh(); }
-      }
-    });
-
-    // Clear All with confirmation
-    clearAllBtn.addEventListener('click', ()=>{
+    // Clear ALL data
+    clearAllBtn.onclick = ()=>{
       const ans = prompt('Are you sure? Type "yes" to clear ALL data and start over.');
       if(ans && ans.toLowerCase()==='yes'){
-        weights=[]; foods=[]; waters=[];
+        weights=[]; foods=[]; waters=[]; exercises=[];
         localStorage.removeItem(KEY_W);
         localStorage.removeItem(KEY_F);
         localStorage.removeItem(KEY_H);
+        localStorage.removeItem(KEY_X);
         localStorage.removeItem(KEY_META); // remove this line if you want to keep name/goal
-        saveAll(); refresh();
+        refresh();
       }
-    });
+    };
+
+    // Goal save/clear
+    saveGoalBtn.onclick = ()=>{ saveAll(); refresh(); };
+    clearGoalBtn.onclick = ()=>{ goalEl.value=''; saveAll(); refresh(); };
+
+    // Recompute summaries when date inputs change
+    foodDate.onchange = ()=> updateFoodExerciseTotals();
+    exDate.onchange = ()=> updateFoodExerciseTotals();
+
+    // Core refresh pieces
+    function renderGoalAndChartAndProgress(){ renderGoalAndProgress(); }
+    function postRender(){ renderSummaryChips(); }
+
+    // Tie into refresh
+    const _oldRefresh = refresh;
+    refresh = function(){
+      renderWeights();
+      renderFoods();
+      renderWater();
+      renderExercise();
+      renderGoalAndProgress();
+      renderSummaryChips();
+    }
   </script>
 </body>
 </html>
