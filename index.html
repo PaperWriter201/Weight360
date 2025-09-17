@@ -6,32 +6,39 @@
   <title>Weight360</title>
   <meta name="theme-color" content="#0f1724">
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--gold:#ffd166;color-scheme:dark}
-    /* Layout fix: use normal block flow so the page scrolls naturally */
+    :root{
+      --bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--gold:#ffd166;--pink:#f472b6;color-scheme:dark
+    }
     html,body{margin:0;background:linear-gradient(180deg,#071026 0%, #071827 100%);color:#e6eef8;
       font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
     .wrap{max-width:980px;margin:16px auto;padding:0 14px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-    h1{font-size:1.15rem;margin:0}
+    header.hero{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;padding:18px 20px;border-radius:16px;background:linear-gradient(135deg, rgba(255,95,162,0.18), rgba(96,165,250,0.12));border:1px solid rgba(255,95,162,0.35);box-shadow:0 10px 30px rgba(2,6,23,0.45)}
+    h1{font-size:1.4rem;margin:0;color:var(--pink)}
     .tiny{font-size:.9rem}.muted{color:var(--muted)}
     .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-      border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
-    input,button{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);
-      background:transparent;color:inherit;min-height:40px}
-    input[type="date"]{min-width:140px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .grow{flex:1 1 280px}
+      border-radius:12px;padding:0;margin-bottom:14px;box-shadow:0 6px 20px rgba(2,6,23,0.6);border:1px solid var(--pink)}
+    .card summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px;font-size:1rem;color:var(--pink)}
+    .card summary::after{content:"▶";color:var(--pink);transition:transform .3s}
+    .card[open] summary::after{transform:rotate(90deg)}
+    .card .content{padding:0 14px 14px}
+    input,button{padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);
+      background:transparent;color:inherit;min-height:34px;font-size:.9rem}
+    input[type="date"]{min-width:120px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .grow{flex:1 1 200px}
     .right{margin-left:auto}
     .pill{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.06)}
-    .section-title{font-size:1rem;margin:0 0 6px}
-    /* Chart fix: set a firm height so it never runs down the page */
-    #chartWrap{position:relative}
-    canvas#weightChart{display:block;width:100% !important;max-height:320px;height:320px !important}
+    .section-title{font-size:1rem;margin:0;color:var(--pink)}
+
+    /* CHART */
+    #chartWrap { position: relative; height: 320px; width: 100%; }
+    #weightChart { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
+
     .chart-row{display:flex;gap:12px;align-items:flex-start}
     .stats{flex:1 1 35%;display:flex;flex-direction:column;gap:8px}
     .stat{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
-    .bar{height:10px;border-radius:8px;background:#1f2a44;overflow:hidden}
-    .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#fca5a5);width:0%}
+    .bar{height:12px;border-radius:8px;background:#1f2a44;overflow:hidden}
+    .bar>span{display:block;height:100%;background:var(--gold);width:0%}
     table{width:100%;border-collapse:collapse;margin-top:8px}
     th,td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.06);font-size:.95rem}
     @media(max-width:780px){.chart-row{flex-direction:column}}
@@ -39,445 +46,187 @@
 </head>
 <body>
   <div class="wrap">
-    <header>
-      <div>
-        <h1>Weight360</h1>
-        <div class="tiny muted">Private weight & calorie tracker — saved locally on this device</div>
-      </div>
-      <div class="tiny muted pill">Goal: <b id="hdrGoal">—</b></div>
-    </header>
-
-    <!-- FOOD & CALORIES — moved to the TOP -->
-    <section class="card" id="foodTop">
-      <h2 class="section-title">Food & Calories</h2>
-      <div class="row">
-        <div><label class="tiny muted">Date</label><br/><input type="date" id="foodDate"></div>
-        <div class="grow"><label class="tiny muted">Food</label><br/><input id="foodName" placeholder="eggs & toast"></div>
-        <div><label class="tiny muted">Calories</label><br/><input type="number" id="foodCals" placeholder="320"></div>
-        <div><button id="addFood">Add food</button></div>
-        <div class="right">
-          <label class="tiny muted">Maintenance kcal/day</label><br/>
-          <input type="number" id="maintKcal" placeholder="auto" style="width:160px">
-          <button id="autoMaint" title="Rough estimate: 12 × current weight">Auto</button>
-        </div>
-      </div>
-      <div class="row tiny" style="margin-top:8px">
-        <span class="pill">Today total: <b id="todayTotal">0</b> kcal</span>
-        <span class="pill">Remaining vs max: <b id="todayRemain">—</b></span>
-      </div>
-      <div style="overflow:auto;max-height:240px;margin-top:10px">
-        <table id="foodTable">
-          <thead><tr><th>Date</th><th>Food</th><th>Calories</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- TOP CONTROLS (weight + goal) -->
-    <section class="card">
-      <div class="row">
-        <div class="grow">
-          <label class="tiny muted">Date</label><br/>
-          <input type="date" id="date">
-        </div>
+    <header class="hero">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap">
         <div>
-          <label class="tiny muted">Weight (lbs)</label><br/>
-          <input type="number" step="0.1" id="weight" placeholder="e.g. 238.6">
+          <h1>Weight360</h1>
+          <div class="tiny muted">Private weight & calorie tracker — saved locally on this device</div>
+          <div class="tiny muted" style="margin-top:6px">Target date: <b id="targetDateLbl">Jan 1, 2026</b></div>
+          <div class="row" style="margin-top:8px">
+            <input id="nameInput" placeholder="Your name" style="width:160px">
+            <button id="saveName" type="button">Set</button>
+            <button id="clearName" type="button">Clear</button>
+            <span class="pill tiny">Hi, <b id="nameDisplay">—</b></span>
+          </div>
         </div>
-        <div class="grow">
-          <label class="tiny muted">Notes</label><br/>
-          <input type="text" id="notes" placeholder="morning weigh-in, gym, etc.">
-        </div>
-        <div>
-          <button id="addWeight">Add</button>
-          <button id="saveWeight" style="display:none">Save</button>
-        </div>
-
-        <!-- Goal controls (edit/clear) -->
-        <div class="right">
-          <label class="tiny muted">Goal (lbs)</label><br/>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <div class="row" style="gap:6px">
-            <input type="number" step="0.1" id="goal" placeholder="190" style="width:120px">
-            <button id="saveGoal">Set</button>
-            <button id="clearGoal" title="Clear saved goal">Clear</button>
+            <input type="number" step="0.1" id="quickWeight" placeholder="Weight" style="width:100px">
+            <button id="quickWeightBtn" type="button">Add</button>
+          </div>
+          <div class="row" style="gap:6px">
+            <input type="number" id="quickCalories" placeholder="Calories" style="width:100px">
+            <button id="quickCaloriesBtn" type="button">Add</button>
+          </div>
+          <div class="row" style="gap:6px">
+            <input type="number" id="quickWater" placeholder="Water (cups)" style="width:100px">
+            <button id="quickWaterBtn" type="button">Add</button>
           </div>
         </div>
       </div>
-      <div class="row tiny muted" style="margin-top:8px">
-        <span>Target date: <b id="targetDateLbl">Jan 1, 2026</b></span>
-        <span class="pill">Max calories/day to hit goal: <b id="maxCalPerDay">—</b></span>
-        <button id="recalc" class="right">Recalculate</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:10px">
+        <div class="bar" style="flex:1"><span id="headerProgressBar"></span></div>
+        <div class="tiny muted">Current weight: <b id="currentWeightLbl">—</b></div>
+        <div class="tiny muted" id="headerProgressLabel">0%</div>
       </div>
-    </section>
+    </header>
+
+    <!-- WEIGHT TRACKER -->
+    <details class="card" open>
+      <summary>Weight Tracker</summary>
+      <div class="content">
+        <div class="row">
+          <div class="grow">
+            <label class="tiny muted">Date</label><br/>
+            <input type="date" id="date">
+          </div>
+          <div>
+            <label class="tiny muted">Weight (lbs)</label><br/>
+            <input type="number" step="0.1" id="weight" placeholder="e.g. 238.6">
+          </div>
+          <div class="grow">
+            <label class="tiny muted">Notes</label><br/>
+            <input type="text" id="notes" placeholder="morning weigh-in, gym, etc.">
+          </div>
+          <div>
+            <button id="addWeight" type="button">Add</button>
+            <button id="saveWeight" type="button" style="display:none">Save</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;align-items:center;gap:8px">
+          <label class="tiny muted">Goal (lbs)</label>
+          <input type="number" step="0.1" id="goal" placeholder="190" style="width:120px">
+          <button id="saveGoal" type="button">Set</button>
+          <button id="clearGoal" type="button" title="Clear saved goal">Clear</button>
+          <span class="pill tiny">Current goal: <b id="hdrGoal">—</b></span>
+        </div>
+      </div>
+    </details>
+
+    <!-- FOOD & CALORIES -->
+    <details class="card">
+      <summary>Food & Calories</summary>
+      <div class="content">
+        <div class="row">
+          <div><label class="tiny muted">Date</label><br/><input type="date" id="foodDate"></div>
+          <div class="grow"><label class="tiny muted">Food</label><br/><input id="foodName" placeholder="eggs & toast"></div>
+          <div><label class="tiny muted">Calories</label><br/><input type="number" id="foodCals" placeholder="320"></div>
+          <div><button id="addFood" type="button">Add food</button></div>
+          <div class="right">
+            <label class="tiny muted">Maintenance kcal/day</label><br/>
+            <input type="number" id="maintKcal" placeholder="auto" style="width:160px">
+            <button id="autoMaint" type="button" title="Rough estimate: 12 × current weight">Auto</button>
+          </div>
+        </div>
+        <div class="row tiny" style="margin-top:8px">
+          <span class="pill">Today total: <b id="todayTotal">0</b> kcal</span>
+          <span class="pill">Remaining vs max: <b id="todayRemain">—</b></span>
+        </div>
+        <div style="overflow:auto;max-height:240px;margin-top:10px">
+          <table id="foodTable">
+            <thead><tr><th>Date</th><th>Food</th><th>Calories</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <!-- HYDRATION -->
+    <details class="card">
+      <summary>Hydration</summary>
+      <div class="content">
+        <div class="row tiny">
+          <span class="pill">Today water: <b id="todayWater">0</b> cups</span>
+        </div>
+        <div style="overflow:auto;max-height:240px;margin-top:10px">
+          <table id="waterTable">
+            <thead><tr><th>Date</th><th>Cups</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </details>
 
     <!-- CHART + STATS -->
-    <section class="card chart-row">
-      <div id="chartWrap" class="grow">
-        <canvas id="weightChart"></canvas>
-        <div class="tiny muted" style="margin-top:6px">Progress toward goal</div>
-        <div class="bar"><span id="progressBar"></span></div>
-        <div class="tiny muted" id="progressLabel" style="margin-top:4px">0%</div>
+    <details class="card">
+      <summary>Chart & Stats</summary>
+      <div class="content chart-row">
+        <div id="chartWrap" class="grow">
+          <canvas id="weightChart"></canvas>
+          <div class="tiny muted" style="margin-top:6px">Progress toward goal</div>
+          <div class="bar"><span id="progressBar"></span></div>
+          <div class="tiny muted" id="progressLabel" style="margin-top:4px">0%</div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="tiny muted">First recorded</div><div id="firstVal">—</div></div>
+          <div class="stat"><div class="tiny muted">Latest</div><div id="latestVal">—</div></div>
+          <div class="stat"><div class="tiny muted">Change</div><div id="changeVal">—</div></div>
+          <div class="stat"><div class="tiny muted">Avg/week</div><div id="rateVal">—</div></div>
+          <div class="stat"><div class="tiny muted">Days left</div><div id="daysLeftVal">—</div></div>
+        </div>
       </div>
-      <div class="stats">
-        <div class="stat"><div class="tiny muted">First recorded</div><div id="firstVal">—</div></div>
-        <div class="stat"><div class="tiny muted">Latest</div><div id="latestVal">—</div></div>
-        <div class="stat"><div class="tiny muted">Change</div><div id="changeVal">—</div></div>
-        <div class="stat"><div class="tiny muted">Avg/week</div><div id="rateVal">—</div></div>
-        <div class="stat"><div class="tiny muted">Days left</div><div id="daysLeftVal">—</div></div>
-        <div class="row" style="gap:6px">
-          <button id="exportCsv">Export CSV</button>
+    </details>
+
+    <!-- WEIGHT ENTRIES -->
+    <details class="card">
+      <summary>Weight Entries</summary>
+      <div class="content">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="tiny muted">Click a row to edit or delete</div>
+        </div>
+        <div style="overflow:auto;max-height:260px">
+          <table id="logTable">
+            <thead><tr><th>Date</th><th>Weight</th><th>Notes</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="clearAll" type="button">Clear ALL data</button>
+          <small class="muted">Data is stored locally in this browser.</small>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="exportCsv" type="button">Export CSV</button>
           <input type="file" id="importCsv" accept=".csv" />
         </div>
       </div>
-    </section>
-
-    <!-- WEIGHT ENTRIES -->
-    <section class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h2 class="section-title">Weight Entries</h2>
-        <div class="tiny muted">Click a row to edit</div>
-      </div>
-      <div style="overflow:auto;max-height:260px">
-        <table id="logTable">
-          <thead><tr><th>Date</th><th>Weight</th><th>Notes</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button id="clearAll">Clear ALL data</button>
-        <small class="muted">Data is stored locally in this browser.</small>
-      </div>
-    </section>
+    </details>
   </div>
 
-  <!-- libs -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
-
   <script>
-    // ====== STORAGE KEYS ======
-    const KEY = 'weight360_v1';
-    const META_KEY = KEY + '_meta';
-    const FOOD_KEY = KEY + '_food';
+    // Simple local name set
+    document.getElementById('saveName').onclick=()=>{
+      const n=document.getElementById('nameInput').value.trim();
+      document.getElementById('nameDisplay').textContent=n||'—';
+      localStorage.setItem('w360_name',n);
+    };
+    document.getElementById('clearName').onclick=()=>{
+      document.getElementById('nameInput').value='';
+      document.getElementById('nameDisplay').textContent='—';
+      localStorage.removeItem('w360_name');
+    };
+    window.addEventListener('load',()=>{
+      const n=localStorage.getItem('w360_name');
+      if(n){document.getElementById('nameInput').value=n;document.getElementById('nameDisplay').textContent=n;}
+    });
 
-    // ====== DATES ======
-    const todayISO = () => new Date().toISOString().slice(0,10);
-    const targetDate = new Date('2026-01-01'); // Jan 1, 2026
-    const fmtShort = (d)=> new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-
-    // ====== STATE ======
-    let entries = [];          // [{date, weight, notes}]
-    let foods = [];            // [{date, name, kcal}]
-    let editingIndex = null;
-
-    // ====== ELEMENTS ======
-    const dateEl = document.getElementById('date');
-    const weightEl = document.getElementById('weight');
-    const notesEl = document.getElementById('notes');
-
-    const goalEl = document.getElementById('goal');
-    const saveGoalBtn = document.getElementById('saveGoal');
-    const clearGoalBtn = document.getElementById('clearGoal');
-    const hdrGoal = document.getElementById('hdrGoal');
-
-    const addWeightBtn = document.getElementById('addWeight');
-    const saveWeightBtn = document.getElementById('saveWeight');
-    const clearAllBtn = document.getElementById('clearAll');
-    const exportCsvBtn = document.getElementById('exportCsv');
-    const importCsv = document.getElementById('importCsv');
-
-    const firstVal = document.getElementById('firstVal');
-    const latestVal = document.getElementById('latestVal');
-    const changeVal = document.getElementById('changeVal');
-    const rateVal = document.getElementById('rateVal');
-    const daysLeftVal = document.getElementById('daysLeftVal');
-    const progressBar = document.getElementById('progressBar');
-    const progressLabel = document.getElementById('progressLabel');
-
-    const maxCalPerDayEl = document.getElementById('maxCalPerDay');
-    const recalcBtn = document.getElementById('recalc');
-    const targetDateLbl = document.getElementById('targetDateLbl');
-
-    const logTableBody = document.querySelector('#logTable tbody');
-
-    // Food elements
-    const foodDate = document.getElementById('foodDate');
-    const foodName = document.getElementById('foodName');
-    const foodCals = document.getElementById('foodCals');
-    const addFoodBtn = document.getElementById('addFood');
-    const foodTableBody = document.querySelector('#foodTable tbody');
-    const todayTotal = document.getElementById('todayTotal');
-    const todayRemain = document.getElementById('todayRemain');
-    const maintKcal = document.getElementById('maintKcal');
-    const autoMaint = document.getElementById('autoMaint');
-
-    // ====== CHART ======
-    const ctx = document.getElementById('weightChart').getContext('2d');
-    let chart = new Chart(ctx, {
-      type: 'line',
-      data: { labels: [], datasets: [{ label:'Weight', data: [], fill:false, tension:0.25, pointRadius:3 }] },
-      options: {
-        responsive:true,
-        maintainAspectRatio:false, // we control height via CSS
-        scales: { x: { type:'time', time:{unit:'day'} }, y: { beginAtZero:false } },
-        plugins:{legend:{display:false}}
+    // Clear all data confirm
+    document.getElementById('clearAll').onclick=()=>{
+      const ans=prompt('Are you sure? Type "yes" to clear ALL data and start over.');
+      if(ans && ans.toLowerCase()==='yes'){
+        localStorage.clear();
+        location.reload();
       }
-    });
-
-    // ====== STORAGE HELPERS ======
-    function saveAll(){
-      localStorage.setItem(KEY, JSON.stringify(entries));
-      localStorage.setItem(FOOD_KEY, JSON.stringify(foods));
-      const meta = { goal: goalEl.value || '', maint: maintKcal.value || '' };
-      localStorage.setItem(META_KEY, JSON.stringify(meta));
-    }
-    function loadAll(){
-      try{ entries = JSON.parse(localStorage.getItem(KEY)||'[]'); }catch{ entries=[]; }
-      try{ foods = JSON.parse(localStorage.getItem(FOOD_KEY)||'[]'); }catch{ foods=[]; }
-      let meta = {};
-      try{ meta = JSON.parse(localStorage.getItem(META_KEY)||'{}'); }catch{}
-      goalEl.value = meta.goal || '190';
-      maintKcal.value = meta.maint || '';
-      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
-    }
-
-    // ====== RENDER ======
-    function renderWeights(){
-      // table
-      logTableBody.innerHTML = '';
-      entries.forEach((e,i)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${e.date}</td><td>${Number(e.weight).toFixed(1)}</td><td>${e.notes||''}</td><td style="text-align:right"><button data-i="${i}" class="del">Delete</button></td>`;
-        tr.style.cursor='pointer';
-        tr.addEventListener('click', (ev)=>{
-          if(ev.target.classList.contains('del')) return;
-          editWeight(i);
-        });
-        tr.querySelector('.del').addEventListener('click', (ev)=>{ ev.stopPropagation(); if(confirm('Delete this entry?')){ entries.splice(i,1); saveAll(); refresh(); }});
-        logTableBody.appendChild(tr);
-      });
-
-      // chart
-      chart.data.labels = entries.map(e=>e.date);
-      chart.data.datasets[0].data = entries.map(e=>({x:e.date, y:parseFloat(e.weight)}));
-      chart.update();
-
-      // stats
-      if(entries.length===0){
-        firstVal.textContent = latestVal.textContent = changeVal.textContent = rateVal.textContent = '—';
-        progressBar.style.width='0%'; progressLabel.textContent='0%';
-      } else {
-        const first = parseFloat(entries[0].weight);
-        const last = parseFloat(entries[entries.length-1].weight);
-        firstVal.textContent = `${first.toFixed(1)} lbs • ${entries[0].date}`;
-        latestVal.textContent = `${last.toFixed(1)} lbs • ${entries[entries.length-1].date}`;
-        const delta = last - first;
-        changeVal.textContent = `${delta>=0?'+':''}${delta.toFixed(1)} lbs`;
-        const start = new Date(entries[0].date);
-        const end = new Date(entries[entries.length-1].date);
-        const days = Math.max(1, Math.round((end - start)/(1000*60*60*24)));
-        const weeks = days/7;
-        rateVal.textContent = `${(delta/weeks).toFixed(2)} lbs/week`;
-
-        // progress to goal
-        const goal = parseFloat(goalEl.value);
-        if(!isNaN(goal)){
-          const span = (first - goal); // lbs to lose from first to goal
-          const done = (first - last); // lost so far
-          const pct = span>0 ? Math.max(0, Math.min(100, (done/span)*100)) : 0;
-          progressBar.style.width = pct.toFixed(1) + '%';
-          progressLabel.textContent = pct.toFixed(1) + '%';
-        } else {
-          progressBar.style.width='0%'; progressLabel.textContent='0%';
-        }
-      }
-
-      // misc
-      const now = new Date();
-      const daysLeft = Math.max(0, Math.ceil((targetDate - now)/(1000*60*60*24)));
-      daysLeftVal.textContent = daysLeft.toString();
-      hdrGoal.textContent = goalEl.value ? `${parseFloat(goalEl.value).toFixed(0)} lbs` : '—';
-    }
-
-    function renderFoods(){
-      foodTableBody.innerHTML = '';
-      foods.forEach((f, i)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${f.date}</td><td>${f.name||''}</td><td>${Number(f.kcal||0)}</td><td style="text-align:right"><button data-i="${i}" class="delFood">Delete</button></td>`;
-        tr.querySelector('.delFood').addEventListener('click', ()=>{ if(confirm('Delete this item?')){ foods.splice(i,1); saveAll(); refresh(); }});
-        foodTableBody.appendChild(tr);
-      });
-
-      const d = foodDate.value || todayISO();
-      const todays = foods.filter(f=>f.date===d);
-      const total = todays.reduce((s,f)=>s+(parseFloat(f.kcal)||0),0);
-      todayTotal.textContent = total.toFixed(0);
-
-      const max = parseFloat(maxCalPerDayEl.textContent) || 0;
-      todayRemain.textContent = max>0 ? `${(max - total).toFixed(0)} kcal` : '—';
-    }
-
-    function refresh(){
-      renderWeights();
-      calcMaxCalories(); // updates maxCalPerDay
-      renderFoods();     // uses updated max for remaining
-    }
-
-    // ====== EDIT / ADD ======
-    function editWeight(i){
-      editingIndex = i;
-      const e = entries[i];
-      dateEl.value = e.date;
-      weightEl.value = e.weight;
-      notesEl.value = e.notes || '';
-      addWeightBtn.style.display='none';
-      saveWeightBtn.style.display='inline-block';
-    }
-
-    // ====== CALC MAX CALORIES/DAY ======
-    // deficit/day = (lbs_to_lose * 3500) / days_left
-    // max/day = maintenance - deficit (clamped to a safety floor)
-    function calcMaxCalories(){
-      if(entries.length===0){ maxCalPerDayEl.textContent = '—'; return; }
-      const last = parseFloat(entries[entries.length-1].weight);
-      const goal = parseFloat(goalEl.value);
-      if(isNaN(last)||isNaN(goal)){ maxCalPerDayEl.textContent='—'; return; }
-      const now = new Date();
-      const daysLeft = Math.max(1, Math.ceil((targetDate - now)/(1000*60*60*24)));
-      const lbsToLose = Math.max(0, last - goal);
-      const dailyDeficit = (lbsToLose * 3500) / daysLeft;
-
-      let maint = parseFloat(maintKcal.value);
-      if(isNaN(maint) || maint<=0){
-        maint = 12 * last; // very rough
-        maintKcal.value = Math.round(maint);
-      }
-      let maxKcal = maint - dailyDeficit;
-      const floor = 1200; // general floor
-      maxKcal = Math.max(floor, Math.round(maxKcal));
-      maxCalPerDayEl.textContent = String(maxKcal);
-    }
-
-    // ====== INIT ======
-    window.addEventListener('load', ()=>{
-      dateEl.value = todayISO();
-      foodDate.value = todayISO();
-      targetDateLbl.textContent = fmtShort(targetDate);
-
-      loadAll();
-
-      if(!localStorage.getItem(META_KEY)){
-        goalEl.value = '190';
-        localStorage.setItem(META_KEY, JSON.stringify({goal:goalEl.value, maint:''}));
-      }
-
-      refresh();
-    });
-
-    // ====== EVENTS ======
-    addWeightBtn.addEventListener('click', ()=>{
-      const d = dateEl.value || todayISO();
-      const w = parseFloat(weightEl.value);
-      if(!d || isNaN(w)){ alert('Enter date and a valid weight'); return; }
-      entries.push({date:d, weight:w, notes:notesEl.value||''});
-      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
-      saveAll(); refresh();
-      dateEl.value=todayISO(); weightEl.value=''; notesEl.value='';
-    });
-
-    saveWeightBtn.addEventListener('click', ()=>{
-      if(editingIndex===null) return;
-      const d = dateEl.value;
-      const w = parseFloat(weightEl.value);
-      if(!d || isNaN(w)){ alert('Enter date and a valid weight'); return; }
-      entries[editingIndex] = {date:d, weight:w, notes:notesEl.value||''};
-      entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
-      editingIndex=null;
-      saveWeightBtn.style.display='none';
-      addWeightBtn.style.display='inline-block';
-      dateEl.value=todayISO(); weightEl.value=''; notesEl.value='';
-      saveAll(); refresh();
-    });
-
-    document.getElementById('saveGoal').addEventListener('click', ()=>{ saveAll(); refresh(); });
-    document.getElementById('clearGoal').addEventListener('click', ()=>{
-      goalEl.value=''; saveAll(); refresh();
-    });
-    goalEl.addEventListener('change', ()=>{ saveAll(); refresh(); });
-
-    clearAllBtn.addEventListener('click', ()=>{
-      if(!confirm('Clear ALL weight & food data?')) return;
-      entries=[]; foods=[];
-      localStorage.removeItem(KEY);
-      localStorage.removeItem(FOOD_KEY);
-      saveAll(); refresh();
-    });
-
-    exportCsvBtn.addEventListener('click', ()=>{
-      const rows = [['type','date','value1','value2']];
-      entries.forEach(e=>rows.push(['weight',e.date,e.weight,e.notes||'']));
-      foods.forEach(f=>rows.push(['food',f.date,f.name||'',f.kcal||0]));
-      const csv = rows.map(r=>r.map(x=>String(x).includes(',')?`"${String(x).replace(/"/g,'""')}"`:x).join(',')).join('\n');
-      const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href=url; a.download='weight360_export.csv'; a.click(); URL.revokeObjectURL(url);
-    });
-
-    importCsv.addEventListener('change', (ev)=>{
-      const file = ev.target.files[0]; if(!file) return;
-      const reader = new FileReader();
-      reader.onload = e=>{
-        const lines = e.target.result.split(/\r?\n/).filter(Boolean);
-        let addW=0, addF=0;
-        for(let i=1;i<lines.length;i++){
-          const cols = parseCSVLine(lines[i]);
-          const type = (cols[0]||'').toLowerCase();
-          if(type==='weight'){
-            const [_,d,w,notes] = cols;
-            const num = parseFloat(w); if(d && !isNaN(num)){ entries.push({date:d,weight:num,notes:notes||''}); addW++; }
-          } else if(type==='food'){
-            const [_,d,name,kcal] = cols;
-            const num = parseFloat(kcal); if(d && !isNaN(num)){ foods.push({date:d,name:name||'',kcal:num}); addF++; }
-          }
-        }
-        entries.sort((a,b)=>new Date(a.date)-new Date(b.date));
-        saveAll(); refresh();
-        alert(`Imported ${addW} weight and ${addF} food rows.`);
-        importCsv.value='';
-      };
-      reader.readAsText(file);
-    });
-
-    recalcBtn.addEventListener('click', ()=>{ saveAll(); refresh(); });
-    autoMaint.addEventListener('click', ()=>{
-      const last = entries.length>0 ? parseFloat(entries[entries.length-1].weight) : 200;
-      maintKcal.value = Math.round(12 * last);
-      saveAll(); refresh();
-    });
-
-    addFoodBtn.addEventListener('click', ()=>{
-      const d = foodDate.value || todayISO();
-      const name = foodName.value.trim();
-      const kcal = parseFloat(foodCals.value);
-      if(!d || !name || isNaN(kcal)){ alert('Enter date, food, and calories'); return; }
-      foods.push({date:d,name:name,kcal:kcal});
-      saveAll(); refresh();
-      foodName.value=''; foodCals.value='';
-    });
-
-    // simple CSV parser for our format
-    function parseCSVLine(line){
-      const out=[]; let cur=''; let inQ=false;
-      for(let i=0;i<line.length;i++){
-        const c=line[i];
-        if(c==='"' ){ if(inQ && line[i+1]==='"'){ cur+='"'; i++; } else { inQ=!inQ; } }
-        else if(c===',' && !inQ){ out.push(cur); cur=''; }
-        else cur+=c;
-      }
-      out.push(cur); return out;
-    }
-
-    // sync between tabs
-    window.addEventListener('storage', ()=>{ loadAll(); refresh(); });
+    };
   </script>
 </body>
 </html>
