@@ -203,30 +203,397 @@
   </div>
 
   <script>
-    // Simple local name set
-    document.getElementById('saveName').onclick=()=>{
-      const n=document.getElementById('nameInput').value.trim();
-      document.getElementById('nameDisplay').textContent=n||'—';
-      localStorage.setItem('w360_name',n);
-    };
-    document.getElementById('clearName').onclick=()=>{
-      document.getElementById('nameInput').value='';
-      document.getElementById('nameDisplay').textContent='—';
-      localStorage.removeItem('w360_name');
-    };
-    window.addEventListener('load',()=>{
-      const n=localStorage.getItem('w360_name');
-      if(n){document.getElementById('nameInput').value=n;document.getElementById('nameDisplay').textContent=n;}
-    });
+// ===== Keys & helpers =====
+const KEY_W = 'w360_weights';
+const KEY_F = 'w360_foods';
+const KEY_H = 'w360_water';
+const KEY_META = 'w360_meta';
+const todayISO = () => new Date().toISOString().slice(0,10);
 
-    // Clear all data confirm
-    document.getElementById('clearAll').onclick=()=>{
-      const ans=prompt('Are you sure? Type "yes" to clear ALL data and start over.');
-      if(ans && ans.toLowerCase()==='yes'){
-        localStorage.clear();
-        location.reload();
+// ===== State =====
+let weights = [];   // [{date, weight, notes}]
+let foods = [];     // [{date, name, kcal}]
+let waters = [];    // [{date, cups}]
+let editingWeightIndex = null;
+let editingFoodIndex = null;
+let editingWaterIndex = null;
+
+// ===== Elements (cache) =====
+const dateEl = document.getElementById('date');
+const weightEl = document.getElementById('weight');
+const notesEl = document.getElementById('notes');
+const addWeightBtn = document.getElementById('addWeight');
+const saveWeightBtn = document.getElementById('saveWeight');
+
+const goalEl = document.getElementById('goal');
+const hdrGoal = document.getElementById('hdrGoal');
+const saveGoalBtn = document.getElementById('saveGoal');
+const clearGoalBtn = document.getElementById('clearGoal');
+
+const foodDate = document.getElementById('foodDate');
+const foodName = document.getElementById('foodName');
+const foodCals = document.getElementById('foodCals');
+const addFoodBtn = document.getElementById('addFood');
+
+const maintKcal = document.getElementById('maintKcal'); // optional
+const autoMaint = document.getElementById('autoMaint'); // optional
+
+const todayTotal = document.getElementById('todayTotal');
+const todayRemain = document.getElementById('todayRemain');
+const logTBody = document.querySelector('#logTable tbody');
+const foodTBody = document.querySelector('#foodTable tbody');
+const waterTBody = document.querySelector('#waterTable tbody');
+
+const importCsv = document.getElementById('importCsv');
+const exportCsvBtn = document.getElementById('exportCsv');
+const clearAllBtn = document.getElementById('clearAll');
+
+// Header quick-adds
+const quickWeight = document.getElementById('quickWeight');
+const quickCalories = document.getElementById('quickCalories');
+const quickWater = document.getElementById('quickWater');
+const quickWeightBtn = document.getElementById('quickWeightBtn');
+const quickCaloriesBtn = document.getElementById('quickCaloriesBtn');
+const quickWaterBtn = document.getElementById('quickWaterBtn');
+
+// Header progress + labels
+const headerBar = document.getElementById('headerProgressBar');
+const headerPct = document.getElementById('headerProgressLabel');
+const currentWeightLbl = document.getElementById('currentWeightLbl');
+
+// Name (already on page)
+const nameInput = document.getElementById('nameInput');
+const saveNameBtn = document.getElementById('saveName');
+const clearNameBtn = document.getElementById('clearName');
+const nameDisplay = document.getElementById('nameDisplay');
+
+// ===== Storage =====
+function saveAll(){
+  localStorage.setItem(KEY_W, JSON.stringify(weights));
+  localStorage.setItem(KEY_F, JSON.stringify(foods));
+  localStorage.setItem(KEY_H, JSON.stringify(waters));
+  const meta = JSON.parse(localStorage.getItem(KEY_META) || '{}');
+  meta.goal = goalEl.value || '';
+  meta.maint = maintKcal?.value || '';
+  meta.name = nameInput?.value || meta.name || '';
+  localStorage.setItem(KEY_META, JSON.stringify(meta));
+}
+
+function loadAll(){
+  try{ weights = JSON.parse(localStorage.getItem(KEY_W) || '[]'); } catch{ weights=[]; }
+  try{ foods   = JSON.parse(localStorage.getItem(KEY_F) || '[]'); } catch{ foods=[]; }
+  try{ waters  = JSON.parse(localStorage.getItem(KEY_H) || '[]'); } catch{ waters=[]; }
+  const meta = JSON.parse(localStorage.getItem(KEY_META) || '{}');
+
+  if(goalEl) goalEl.value = meta.goal || goalEl.value || '';
+  if(maintKcal) maintKcal.value = meta.maint || '';
+  if(nameInput && nameDisplay && meta.name){
+    nameInput.value = meta.name; nameDisplay.textContent = meta.name;
+  }
+  // keep weights ordered
+  weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
+}
+
+// ===== Rendering =====
+function renderWeights(){
+  logTBody.innerHTML = '';
+  weights.forEach((e,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${e.date}</td>
+      <td>${Number(e.weight).toFixed(1)}</td>
+      <td>${e.notes||''}</td>
+      <td style="text-align:right">
+        <button data-i="${i}" class="editW">Edit</button>
+        <button data-i="${i}" class="delW">Delete</button>
+      </td>`;
+    tr.querySelector('.editW').addEventListener('click', ()=>{
+      editingWeightIndex = i;
+      dateEl.value = e.date; weightEl.value = e.weight; notesEl.value = e.notes||'';
+      addWeightBtn.style.display='none'; saveWeightBtn.style.display='inline-block';
+    });
+    tr.querySelector('.delW').addEventListener('click', ()=>{
+      if(confirm('Delete this weight entry?')){
+        weights.splice(i,1); saveAll(); refresh();
       }
-    };
-  </script>
+    });
+    logTBody.appendChild(tr);
+  });
+  // header current weight label
+  const last = weights.length ? weights[weights.length-1].weight : '';
+  currentWeightLbl.textContent = last !== '' ? Number(last).toFixed(1) : '—';
+}
+
+function renderFoods(){
+  foodTBody.innerHTML = '';
+  foods.forEach((f,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${f.date}</td>
+      <td>${f.name||''}</td>
+      <td>${Number(f.kcal||0)}</td>
+      <td style="text-align:right">
+        <button data-i="${i}" class="editF">Edit</button>
+        <button data-i="${i}" class="delF">Delete</button>
+      </td>`;
+    tr.querySelector('.editF').addEventListener('click', ()=>{
+      editingFoodIndex = i;
+      foodDate.value = f.date; foodName.value = f.name||''; foodCals.value = f.kcal||'';
+    });
+    tr.querySelector('.delF').addEventListener('click', ()=>{
+      if(confirm('Delete this food item?')){
+        foods.splice(i,1); saveAll(); refresh();
+      }
+    });
+    foodTBody.appendChild(tr);
+  });
+
+  // Today total + remaining vs max
+  const d = foodDate.value || todayISO();
+  const todays = foods.filter(f=> f.date === d);
+  const total = todays.reduce((s,f)=> s + (parseFloat(f.kcal)||0), 0);
+  if(todayTotal) todayTotal.textContent = String(Math.round(total));
+
+  const max =
+    parseFloat(document.getElementById('maxCalPerDay')?.textContent || maintKcal?.value || '0') || 0;
+  if(todayRemain) todayRemain.textContent = max>0 ? `${Math.round(max - total)} kcal` : '—';
+}
+
+function renderWater(){
+  waterTBody.innerHTML = '';
+  waters.forEach((w,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${w.date}</td>
+      <td>${Number(w.cups)}</td>
+      <td style="text-align:right">
+        <button data-i="${i}" class="editH">Edit</button>
+        <button data-i="${i}" class="delH">Delete</button>
+      </td>`;
+    tr.querySelector('.editH').addEventListener('click', ()=>{
+      editingWaterIndex = i;
+      // reuse quick water box for editing input
+      quickWater.value = w.cups;
+    });
+    tr.querySelector('.delH').addEventListener('click', ()=>{
+      if(confirm('Delete this water entry?')){
+        waters.splice(i,1); saveAll(); refresh();
+      }
+    });
+    waterTBody.appendChild(tr);
+  });
+
+  const today = todayISO();
+  const total = waters.filter(w=> w.date===today).reduce((s,w)=> s + (parseFloat(w.cups)||0), 0);
+  const tw = document.getElementById('todayWater'); if(tw) tw.textContent = String(total);
+}
+
+function renderGoalAndProgress(){
+  if(hdrGoal) hdrGoal.textContent = goalEl.value ? `${parseFloat(goalEl.value).toFixed(0)} lbs` : '—';
+
+  const first   = weights.length ? parseFloat(weights[0].weight) : NaN;
+  const current = weights.length ? parseFloat(weights[weights.length-1].weight) : NaN;
+  const goal    = parseFloat(goalEl.value);
+
+  if(isNaN(first) || isNaN(current) || isNaN(goal)){
+    headerBar.style.width = '0%';
+    headerPct.textContent = '0%';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressLabel').textContent = '0%';
+    return;
+  }
+  const span = first - goal;
+  const done = first - current;
+  const pct  = span>0 ? Math.max(0, Math.min(100, (done/span)*100)) : 0;
+  // header bar
+  headerBar.style.width = pct.toFixed(1) + '%';
+  headerPct.textContent = pct.toFixed(1) + '%';
+  // section bar
+  document.getElementById('progressBar').style.width = pct.toFixed(1) + '%';
+  document.getElementById('progressLabel').textContent = pct.toFixed(1) + '%';
+}
+
+function refresh(){
+  renderWeights();
+  renderFoods();
+  renderWater();
+  renderGoalAndProgress();
+}
+
+// ===== Events =====
+window.addEventListener('load', ()=>{
+  if(dateEl) dateEl.value = todayISO();
+  if(foodDate) foodDate.value = todayISO();
+
+  // Restore name (legacy support from earlier script)
+  const legacyName = localStorage.getItem('w360_name');
+  if(legacyName && nameInput && nameDisplay){
+    nameInput.value = legacyName; nameDisplay.textContent = legacyName;
+  }
+
+  loadAll();
+  refresh();
+});
+
+// Weight add/save
+addWeightBtn.addEventListener('click', ()=>{
+  const d = dateEl.value || todayISO();
+  const w = parseFloat(weightEl.value);
+  if(!d || isNaN(w)) return alert('Enter a date and valid weight');
+
+  if(editingWeightIndex !== null){
+    weights[editingWeightIndex] = {date:d, weight:w, notes:notesEl.value||''};
+    editingWeightIndex = null; saveWeightBtn.style.display='none'; addWeightBtn.style.display='inline-block';
+  } else {
+    weights.push({date:d, weight:w, notes:notesEl.value||''});
+  }
+  weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  weightEl.value=''; notesEl.value='';
+  saveAll(); refresh();
+});
+
+saveWeightBtn.addEventListener('click', ()=>{
+  const i = editingWeightIndex; if(i===null || i<0 || i>=weights.length) return alert('Select a row to edit first');
+  const d = dateEl.value; const w = parseFloat(weightEl.value);
+  if(!d || isNaN(w)) return alert('Enter a date and valid weight');
+  weights[i] = {date:d, weight:w, notes:notesEl.value||''};
+  weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  editingWeightIndex = null; saveWeightBtn.style.display='none'; addWeightBtn.style.display='inline-block';
+  weightEl.value=''; notesEl.value='';
+  saveAll(); refresh();
+});
+
+// Food add/save
+addFoodBtn.addEventListener('click', ()=>{
+  const d = foodDate.value || todayISO();
+  const name = foodName.value || 'Quick entry';
+  const kcal = parseFloat(foodCals.value);
+  if(!d || isNaN(kcal)) return alert('Enter date and calories');
+
+  if(editingFoodIndex !== null){
+    foods[editingFoodIndex] = {date:d, name, kcal};
+    editingFoodIndex = null;
+  } else {
+    foods.push({date:d, name, kcal});
+  }
+  foodName.value=''; foodCals.value='';
+  saveAll(); refresh();
+});
+
+// Water add/save (via header quick)
+quickWaterBtn.addEventListener('click', ()=>{
+  const cups = parseFloat(quickWater.value);
+  if(isNaN(cups)) return alert('Enter water in cups');
+  const d = todayISO();
+  if(editingWaterIndex !== null){
+    waters[editingWaterIndex] = {date:d, cups};
+    editingWaterIndex = null;
+  } else {
+    waters.push({date:d, cups});
+  }
+  quickWater.value='';
+  saveAll(); refresh();
+});
+
+// Header quick: weight & calories
+quickWeightBtn.addEventListener('click', ()=>{
+  const v = parseFloat(quickWeight.value);
+  if(isNaN(v)) return alert('Enter a weight');
+  const d = todayISO();
+  weights.push({date:d, weight:v, notes:''});
+  weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  quickWeight.value='';
+  saveAll(); refresh();
+});
+
+quickCaloriesBtn.addEventListener('click', ()=>{
+  const cals = parseFloat(quickCalories.value);
+  if(isNaN(cals)) return alert('Enter calories');
+  foods.push({date:todayISO(), name:'Quick entry', kcal:cals});
+  quickCalories.value='';
+  saveAll(); refresh();
+});
+
+// Goal & Name
+saveGoalBtn.addEventListener('click', ()=>{ saveAll(); refresh(); });
+clearGoalBtn.addEventListener('click', ()=>{ goalEl.value=''; saveAll(); refresh(); });
+
+saveNameBtn.addEventListener('click', ()=>{
+  nameDisplay.textContent = nameInput.value || '—';
+  saveAll();
+});
+clearNameBtn.addEventListener('click', ()=>{
+  nameInput.value=''; nameDisplay.textContent='—';
+  saveAll();
+});
+
+// Export/Import CSV
+exportCsvBtn.addEventListener('click', ()=>{
+  const rows = [['type','date','value1','value2']];
+  weights.forEach(e=> rows.push(['weight', e.date, e.weight, e.notes||'']));
+  foods.forEach(f  => rows.push(['food',   f.date, f.name||'', f.kcal||0]));
+  waters.forEach(h => rows.push(['water',  h.date, h.cups||0, '' ]));
+
+  const csv = rows.map(r =>
+    r.map(x => String(x).includes(',') ? `"${String(x).replace(/"/g,'""')}"` : x).join(',')
+  ).join('\n');
+
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'weight360_export.csv';
+  a.click(); URL.revokeObjectURL(url);
+});
+
+importCsv.addEventListener('change', ev=>{
+  const file = ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const lines = e.target.result.split(/\r?\n/).filter(Boolean);
+    for(let i=1;i<lines.length;i++){
+      const cols = parseCSVLine(lines[i]);
+      const type = (cols[0]||'').toLowerCase();
+      if(type==='weight'){
+        const [_,d,w,notes] = cols; const num = parseFloat(w);
+        if(d && !isNaN(num)) weights.push({date:d, weight:num, notes:notes||''});
+      } else if(type==='food'){
+        const [_,d,name,kcal] = cols; const num = parseFloat(kcal);
+        if(d && !isNaN(num)) foods.push({date:d, name:name||'', kcal:num});
+      } else if(type==='water'){
+        const [_,d,cups] = cols; const num = parseFloat(cups);
+        if(d && !isNaN(num)) waters.push({date:d, cups:num});
+      }
+    }
+    weights.sort((a,b)=> new Date(a.date)-new Date(b.date));
+    saveAll(); refresh();
+    importCsv.value='';
+  };
+  reader.readAsText(file);
+});
+
+function parseCSVLine(line){
+  const out=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c=='"'){ if(inQ && line[i+1]=='"'){ cur+='"'; i++; } else { inQ=!inQ; } }
+    else if(c==',' && !inQ){ out.push(cur); cur=''; }
+    else cur+=c;
+  }
+  out.push(cur); return out;
+}
+
+// Clear All with confirmation
+clearAllBtn.addEventListener('click', ()=>{
+  const ans = prompt('Are you sure? Type "yes" to clear ALL data and start over.');
+  if(ans && ans.toLowerCase()==='yes'){
+    weights=[]; foods=[]; waters=[];
+    localStorage.removeItem(KEY_W);
+    localStorage.removeItem(KEY_F);
+    localStorage.removeItem(KEY_H);
+    // keep name & goal? comment out next line to preserve meta
+    localStorage.removeItem(KEY_META);
+    saveAll(); refresh();
+  }
+});
+</script>
 </body>
 </html>
