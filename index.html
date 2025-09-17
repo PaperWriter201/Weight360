@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Weight360</title>
 
-  <!-- Icons / theme (favicon is inline SVG so you don't need extra files) -->
-  <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="100%" height="100%" rx="48" ry="48" fill="%230f1724"/><text x="50%" y="56%" dominant-baseline="middle" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="98" font-weight="700" fill="%23f472b6">W360</text></svg>' type="image/svg+xml">
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png?v=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
   <meta name="theme-color" content="#0f1724">
 
   <!-- Chart.js -->
@@ -59,6 +60,11 @@
     .stats{flex:1 1 35%;display:flex;flex-direction:column;gap:8px}
     .stat{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
     @media(max-width:780px){.chart-row{flex-direction:column}}
+
+    /* Header logo */
+    .brand{display:flex;align-items:center;gap:10px}
+    .brand img{height:40px;width:auto;display:block}
+    @media(max-width:480px){ .brand img{height:32px} }
   </style>
 </head>
 <body>
@@ -66,7 +72,10 @@
     <header class="hero">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap">
         <div>
-          <h1>Weight360</h1>
+          <div class="brand">
+            <img src="logo-hero.png" alt="Weight360 logo">
+            <h1>Weight360</h1>
+          </div>
           <div class="tiny muted">Private weight & calorie tracker — saved locally on this device</div>
           <div class="tiny muted" style="margin-top:6px">Target date: <b id="targetDateLbl">Jan 1, 2026</b></div>
           <div class="row" style="margin-top:8px">
@@ -198,7 +207,7 @@
     <details class="card">
       <summary>Weight Entries</summary>
       <div class="content">
-        <div class="tiny muted">Click **Edit** to load a row into the form above, then press **Save**.</div>
+        <div class="tiny muted">Click <b>Edit</b> to load a row into the form above, then press <b>Save</b>.</div>
         <div style="overflow:auto;max-height:260px">
           <table id="logTable">
             <thead><tr><th>Date</th><th>Weight</th><th>Notes</th><th></th></tr></thead>
@@ -302,7 +311,6 @@
       if(goalEl) goalEl.value = meta.goal || goalEl.value || '';
       if(maintKcal) maintKcal.value = meta.maint || '';
       if(nameInput && nameDisplay && meta.name){ nameInput.value = meta.name; nameDisplay.textContent = meta.name; }
-      // keep weights ordered
       weights.sort((a,b)=> new Date(a.date) - new Date(b.date));
     }
 
@@ -322,10 +330,8 @@
           </td>`;
         logTBody.appendChild(tr);
       });
-      // header current weight label
       const last = weights.length ? weights[weights.length-1].weight : '';
       currentWeightLbl.textContent = last!=='' ? Number(last).toFixed(1) : '—';
-      // stats
       renderStats();
     }
 
@@ -345,7 +351,6 @@
         foodTBody.appendChild(tr);
       });
 
-      // Today total + remaining vs max
       const d = foodDate.value || todayISO();
       const todays = foods.filter(f=> f.date === d);
       const total = todays.reduce((s,f)=> s + (parseFloat(f.kcal)||0), 0);
@@ -450,13 +455,11 @@
       const diff = last.weight - first.weight;
       changeVal.textContent = (diff>=0?'+':'') + diff.toFixed(1) + ' lbs';
 
-      // avg per week
       const d0 = new Date(first.date), d1 = new Date(last.date);
       const days = Math.max(1, Math.round((d1 - d0)/86400000));
       const perWeek = (diff / days) * 7;
       rateVal.textContent = (perWeek>=0?'+':'') + perWeek.toFixed(2) + ' lbs/wk';
 
-      // days left to target date
       const targetTxt = document.getElementById('targetDateLbl').textContent;
       const target = new Date(targetTxt);
       const today = new Date(); today.setHours(0,0,0,0);
@@ -506,7 +509,6 @@
       if(dateEl) dateEl.value = todayISO();
       if(foodDate) foodDate.value = todayISO();
 
-      // support legacy name
       const legacyName = localStorage.getItem('w360_name');
       if(legacyName && nameInput && nameDisplay){
         nameInput.value = legacyName; nameDisplay.textContent = legacyName;
@@ -655,7 +657,7 @@
       out.push(cur); return out;
     }
 
-    // ===== Event delegation for Edit/Delete (reliable even for new rows) =====
+    // Event delegation for Edit/Delete (reliable)
     logTBody.addEventListener('click', (e)=>{
       const tr = e.target.closest('tr'); if(!tr) return;
       const idx = +tr.dataset.index;
