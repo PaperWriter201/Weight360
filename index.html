@@ -183,6 +183,30 @@
       </div>
     </details>
 
+    <!-- EXERCISE -->
+<details class="card">
+  <summary>Exercise</summary>
+  <div class="content">
+    <div class="row">
+      <div><label class="tiny muted">Date</label><br/><input type="date" id="exDate"></div>
+      <div class="grow"><label class="tiny muted">Activity</label><br/><input id="exActivity" placeholder="Walking, Gym, etc."></div>
+      <div><label class="tiny muted">Miles</label><br/><input type="number" step="0.1" id="exMiles" placeholder="2.5"></div>
+      <div><label class="tiny muted">Calories Burned</label><br/><input type="number" id="exCals" placeholder="200"></div>
+      <div><button id="addEx" type="button">Add Exercise</button></div>
+    </div>
+    <div class="row tiny" style="margin-top:8px">
+      <span class="pill">Today Exercise Calories: <b id="todayExCals">0</b></span>
+      <span class="pill">Net Calories: <b id="todayNetCals">—</b></span>
+    </div>
+    <div style="overflow:auto;max-height:240px;margin-top:10px">
+      <table id="exTable">
+        <thead><tr><th>Date</th><th>Activity</th><th>Miles</th><th>Calories</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</details>
+
     <!-- CHART + STATS -->
     <details class="card">
       <summary>Chart & Stats</summary>
@@ -225,6 +249,26 @@
       </div>
     </details>
   </div>
+
+  <!-- DAILY SUMMARY -->
+<details class="card">
+  <summary>Daily Summary</summary>
+  <div class="content">
+    <div id="summaryWrap">
+      <p class="tiny muted">At the end of each day, totals are captured here and saved under Weight Entries.</p>
+      <div class="row">
+        <span class="pill">Weight: <b id="sumWeight">—</b></span>
+        <span class="pill">Calories (Net): <b id="sumNetCals">—</b></span>
+        <span class="pill">Water: <b id="sumWater">—</b> cups</span>
+        <span class="pill">Exercise: <b id="sumEx">—</b></span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="closeDay" type="button">Save Day & Reset</button>
+      </div>
+    </div>
+  </div>
+</details>
+</div>
 
   <script>
     // ===== Keys & helpers =====
